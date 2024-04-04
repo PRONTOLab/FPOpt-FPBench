@@ -1,3 +1,7 @@
+```bash
+~/llvms/llvm15/buildD/bin/clang++ driver.cpp -include /home/wmoses/llvms/llvm16/buildD/lib/clang/16/include/stdint.h -include benchmarks/rump.fpcore.c -I /usr/include/c++/11 -I /usr/include/x86_64-linux-gnu/c++/11 -L /usr/lib/gcc/x86_64-linux-gnu/11 -o o3f.exe -O3 -ffast-math
+```
+
 ![FPBench](logo.png)
 
 FPBench provides benchmarks, compilers, and standards for the floating-point research community. 
