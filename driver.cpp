@@ -43,7 +43,8 @@ std::vector<std::vector<T>> &inputs() {
 
 template <typename t>
 void run(std::function<t()> f, const char *name, std::string argstr, unsigned i) {
-  std::cout << name << "(" << argstr.c_str() + 2 << ") = " << std::setprecision(15) << f()
+
+  std::cout << name << "(" << (i == 0 ? "" : argstr.c_str() + 2) << ") = " << std::setprecision(15) << f()
             << std::endl;
 }
 
