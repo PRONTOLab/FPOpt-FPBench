@@ -8,7 +8,7 @@ echo Handling "$SRC"
 NEWDRIVER="$SRC.driver.cpp"
 cp driver.cpp "$NEWDRIVER"
 
-EXE="$SRC.exe"
+AOUT="$SRC.a.out"
 
 NUM="$(grep -e ' ex[0-9]*(' -- $SRC | wc -l)"
 
@@ -20,6 +20,6 @@ done
 echo "    return 0;" >> "$NEWDRIVER"
 echo "}" >> "$NEWDRIVER"
 
-clang++ -Wall "$NEWDRIVER" -g -include "$SRC" -o "$EXE" $CXXFLAGS 1>2
+clang++ -Wall "$NEWDRIVER" -g -include "$SRC" -o "$AOUT" $CXXFLAGS 1>2
 
-"$EXE"
+"$AOUT"
