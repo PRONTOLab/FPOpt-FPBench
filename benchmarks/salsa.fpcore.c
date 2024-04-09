@@ -314,6 +314,7 @@ float ex7(float x0) {
 }
 
 float ex8(float a11, float a12, float a13, float a14, float a21, float a22, float a23, float a24, float a31, float a32, float a33, float a34, float a41, float a42, float a43, float a44, float v1, float v2, float v3, float v4) {
+	// TODO doesnt always converge, even without mpfr
 	// float eps = 0.0005f;
 	// float vx = 0.0f;
 	// float vy = 0.0f;
