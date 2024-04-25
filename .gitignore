@@ -5,3 +5,7 @@ fpbench-compiled/
 *.dep
 *.zo
 *.swp
+*.driver.cpp
+*.driver-enzyme.cpp
+*.a.out
+*.o
