@@ -1,12 +1,15 @@
 #!/usr/bin/env sh
 
+set -e
+
 
 SRC="$1"
+DRIVER="$2"
 
 echo Handling "$SRC"
 
 NEWDRIVER="$SRC.driver.cpp"
-cp driver.cpp "$NEWDRIVER"
+cp "$DRIVER" "$NEWDRIVER"
 
 AOUT="$SRC.a.out"
 
