@@ -1,7 +1,10 @@
 #!/usr/bin/env sh
 set -e
 
-export CXXFLAGS='-fno-exceptions -fpass-plugin=/scr/ivan/src/Enzyme/enzyme/build-16.0.6.release/Enzyme/ClangEnzyme-16.so -Xclang -load -Xclang /scr/ivan/src/Enzyme/enzyme/build-16.0.6.release/Enzyme/ClangEnzyme-16.so -ffast-math -fuse-ld=lld -Rpass=enzyme'
+BUILD_TYPE=release
+
+. enable.sh "/scr/ivan//opt/llvm-project-16.0.6-$BUILD_TYPE/"
+export CXXFLAGS="-fno-exceptions -fpass-plugin=/scr/ivan/src/Enzyme/enzyme/build-16.0.6.$BUILD_TYPE/Enzyme/ClangEnzyme-16.so -Xclang -load -Xclang /scr/ivan/src/Enzyme/enzyme/build-16.0.6.$BUILD_TYPE/Enzyme/ClangEnzyme-16.so -ffast-math -fuse-ld=lld -Rpass=enzyme"
 
 #export CXXFLAGS="$CXXFLAGS -O0"
 export CXXFLAGS="$CXXFLAGS -O2"

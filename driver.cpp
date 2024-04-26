@@ -66,4 +66,4 @@ __attribute__((noinline)) void run2(t (*f)(args...), const char *name) {
 void init() { srand(1); }
 void cleanup() {}
 
-#define RUN(arg) run2(arg, #arg);
+#define RUN(arg) run2(arg, #arg)

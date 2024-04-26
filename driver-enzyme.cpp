@@ -10,8 +10,8 @@
 #define FROM 64
 #define TO 32
 
-constexpr unsigned INPUT_NUM = 1;
-constexpr unsigned MAX_ARG_NUM = 50;
+static constexpr unsigned INPUT_NUM = 1;
+static constexpr unsigned MAX_ARG_NUM = 50;
 
 template <typename T,
           std::enable_if_t<std::is_floating_point<T>::value, bool> = true>
@@ -82,4 +82,4 @@ void init() { srand(1); }
 void __enzyme_fprt_delete_all();
 void cleanup() { __enzyme_fprt_delete_all(); }
 
-#define RUN(arg) run2(__enzyme_truncate_mem_func(arg, FROM, TO), #arg);
+#define RUN(arg) run2(__enzyme_truncate_mem_func(arg, FROM, TO), #arg)

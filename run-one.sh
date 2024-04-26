@@ -17,8 +17,8 @@ for i in $(seq 0 $(( $NUM - 1 ))); do
     cp "$DRIVER" "$NEWDRIVER"
     echo "int main() {" >> "$NEWDRIVER"
     echo "    init();" >> "$NEWDRIVER"
-    echo "    RUN(ex$i)" >> "$NEWDRIVER"
-    echo "    cleanup()" >> "$NEWDRIVER"
+    echo "    RUN(ex$i);" >> "$NEWDRIVER"
+    echo "    cleanup();" >> "$NEWDRIVER"
     echo "    return 0;" >> "$NEWDRIVER"
     echo "}" >> "$NEWDRIVER"
     clang++ -Wall "$NEWDRIVER" -g -include "$SRC" -o "$AOUT" $CXXFLAGS 1>2
