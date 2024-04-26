@@ -49,7 +49,9 @@ std::vector<std::vector<T>> &inputs() {
 template <typename t>
 void run(std::function<t()> f, const char *name, std::string argstr,
          unsigned i) {
-  auto res = __enzyme_expand_mem_value_d(f(), FROM, TO);
+  auto res = f();
+  if (std::is_same<double, t>::value)
+    res = __enzyme_expand_mem_value_d(res, FROM, TO);
   std::cout << name << "(" << (i == 0 ? "" : argstr.c_str() + 2)
             << ") = " << std::setprecision(15) << res << std::endl;
 }
@@ -59,7 +61,9 @@ void run(std::function<t(arg, args...)> f, const char *name, std::string argstr,
          unsigned argno) {
   for (arg i : inputs<arg>()[argno]) {
     run(std::function<t(args...)>([=](args... a) {
-          auto ti = __enzyme_truncate_mem_value_d(i, FROM, TO);
+          arg ti = i;
+          if (std::is_same<double, arg>::value)
+            ti = __enzyme_truncate_mem_value_d(i, FROM, TO);
           return f(ti, a...);
         }),
         name, argstr + ", " + std::to_string(i), argno + 1);
@@ -75,5 +79,7 @@ __attribute__((noinline)) void run2(t (*f)(args...), const char *name) {
 }
 
 void init() { srand(1); }
+void __enzyme_fprt_delete_all();
+void cleanup() { __enzyme_fprt_delete_all(); }
 
 #define RUN(arg) run2(__enzyme_truncate_mem_func(arg, FROM, TO), #arg);

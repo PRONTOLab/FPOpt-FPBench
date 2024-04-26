@@ -18,8 +18,18 @@ for i in $(seq 0 $(( $NUM - 1 ))); do
     echo "int main() {" >> "$NEWDRIVER"
     echo "    init();" >> "$NEWDRIVER"
     echo "    RUN(ex$i)" >> "$NEWDRIVER"
+    echo "    cleanup()" >> "$NEWDRIVER"
     echo "    return 0;" >> "$NEWDRIVER"
     echo "}" >> "$NEWDRIVER"
     clang++ -Wall "$NEWDRIVER" -g -include "$SRC" -o "$AOUT" $CXXFLAGS 1>2
-    timeout -k 1s 5s "$AOUT" || echo TIMEOUT OR FAIL
+    set +e
+    timeout -k 1s 5s "$AOUT"
+    TIMEOUT_RESULT=$?
+    set -e
+    if [ $TIMEOUT_RESULT -eq 124 ]; then
+        echo Timed out.
+    elif [ $TIMEOUT_RESULT -ne 0 ]; then
+        echo Failed.
+        false
+    fi
 done
