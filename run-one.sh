@@ -21,7 +21,7 @@ for i in $(seq 0 $(( $NUM - 1 ))); do
     echo "    cleanup();" >> "$NEWDRIVER"
     echo "    return 0;" >> "$NEWDRIVER"
     echo "}" >> "$NEWDRIVER"
-    clang++ -Wall "$NEWDRIVER" -O3 -include "$SRC" -o "$AOUT" $CXXFLAGS 1>2 -v
+    clang++ -Wall "$NEWDRIVER" -O3 -include "$SRC" -o "$AOUT" $CXXFLAGS 1>2
     set +e
     timeout -k 1s 5s "$AOUT"
     TIMEOUT_RESULT=$?
