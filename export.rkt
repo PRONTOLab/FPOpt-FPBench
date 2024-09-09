@@ -2,7 +2,10 @@
 
 ; utility
 (require "src/fpcore-reader.rkt"
+         "src/fpcore-extra.rkt"
          "src/compilers.rkt"
+         "src/common.rkt"
+         "src/range-analysis.rkt"
          "src/supported.rkt"
          "src/multi-command-line.rkt")
 
@@ -44,6 +47,21 @@
 (define (determine-lang preset file-name)
   (define lang (or preset (file-extension file-name)))
   (and lang (string-downcase lang)))
+
+(define (get-core-pre core)
+  (match core
+    [(list 'FPCore (list args ...) props ... body)
+     (let-values ([(_ properties) (parse-properties props)])
+       (define pre ((compose canonicalize remove-let)
+               (dict-ref properties ':pre 'TRUE)))
+       (define range-table (condition->range-table pre))
+       (format "/* Preconditions: ~s */" range-table))]
+    [(list 'FPCore name (list args ...) props ... body)
+     (let-values ([(_ properties) (parse-properties props)])
+       (define pre ((compose canonicalize remove-let)
+               (dict-ref properties ':pre 'TRUE)))
+       (define range-table (condition->range-table pre))
+       (format "/* Preconditions: ~s */" range-table))]))
 
 (define (export-main argv stdin-port stdout-port)
   (define *lang* (make-parameter #f))
@@ -128,11 +146,13 @@
     (fprintf output-port (header namespace)))
 
    (for ([core (in-port (curry read-fpcore (if (equal? (export-ctx-in-file ctx) "-") "stdin" (export-ctx-in-file ctx))) input-port)] [n (in-naturals)])
+     (define c-pre (get-core-pre core))
      (let ([unsupported (unsupported-features core supported)])
       (unless (set-empty? unsupported)
         (raise-user-error (format "Sorry, the *.~a exporter does not support ~a" extension
             (string-join (map ~a unsupported) ", ")))))
-     (fprintf output-port "~a\n" (export core (format "ex~a" n))))
+     (fprintf output-port "~a\n" (export core (format "ex~a" n)))
+     (when (equal? extension "c") (fprintf output-port "~a\n\n" c-pre)))
    (unless (export-ctx-bare ctx) (fprintf output-port (footer))))
 
 (module+ main
