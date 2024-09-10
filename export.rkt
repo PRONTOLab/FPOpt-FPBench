@@ -55,13 +55,41 @@
        (define pre ((compose canonicalize remove-let)
                (dict-ref properties ':pre 'TRUE)))
        (define range-table (condition->range-table pre))
-       (format "/* Preconditions: ~s */" range-table))]
+       (match range-table
+          [(hash-table (varname (list (interval lower upper lower_inc upper_inc))) ...)
+              (string-join
+                  (map (lambda (varname lower upper lower_inc upper_inc)
+                    (format "// ## PRE ~a: ~a, ~a, ~a, ~a\n"
+                           varname lower upper lower_inc upper_inc))
+                    varname lower upper lower_inc upper_inc)
+            "")]
+          [(list (list varname (list (interval lower upper lower_inc upper_inc))) ...)
+                 (string-join
+                  (map (lambda (varname lower upper lower_inc upper_inc)
+                    (format "// ## PRE ~a: ~a, ~a, ~a, ~a\n"
+                           varname lower upper lower_inc upper_inc))
+                    varname lower upper lower_inc upper_inc)
+            "")]))]
     [(list 'FPCore name (list args ...) props ... body)
      (let-values ([(_ properties) (parse-properties props)])
        (define pre ((compose canonicalize remove-let)
                (dict-ref properties ':pre 'TRUE)))
        (define range-table (condition->range-table pre))
-       (format "/* Preconditions: ~s */" range-table))]))
+       (match range-table
+          [(hash-table (varname (list (interval lower upper lower_inc upper_inc))) ...)
+                 (string-join
+                  (map (lambda (varname lower upper lower_inc upper_inc)
+                    (format "// ## PRE ~a: ~a, ~a, ~a, ~a\n"
+                           varname lower upper lower_inc upper_inc))
+                    varname lower upper lower_inc upper_inc)
+            "")]
+          [(list (list varname (list (interval lower upper lower_inc upper_inc))) ...)
+                 (string-join
+                  (map (lambda (varname lower upper lower_inc upper_inc)
+                    (format "// ## PRE ~a: ~a, ~a, ~a, ~a\n"
+                           varname lower upper lower_inc upper_inc))
+                    varname lower upper lower_inc upper_inc)
+            "")]))]))
 
 (define (export-main argv stdin-port stdout-port)
   (define *lang* (make-parameter #f))
@@ -151,8 +179,8 @@
       (unless (set-empty? unsupported)
         (raise-user-error (format "Sorry, the *.~a exporter does not support ~a" extension
             (string-join (map ~a unsupported) ", ")))))
-     (fprintf output-port "~a\n" (export core (format "ex~a" n)))
-     (when (equal? extension "c") (fprintf output-port "~a\n\n" c-pre)))
+     (when (equal? extension "c") (fprintf output-port "~a" c-pre))
+     (fprintf output-port "~a\n" (export core (format "ex~a" n))))
    (unless (export-ctx-bare ctx) (fprintf output-port (footer))))
 
 (module+ main
