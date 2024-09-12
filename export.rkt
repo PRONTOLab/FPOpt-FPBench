@@ -56,19 +56,19 @@
                (dict-ref properties ':pre 'TRUE)))
        (define range-table (condition->range-table pre))
        (match range-table
-          [(hash-table (varname (list (interval lower upper lower_inc upper_inc))) ...)
+          [(hash-table (varname (list (interval lower upper _ _))) ...)
               (string-join
-                  (map (lambda (varname lower upper lower_inc upper_inc)
-                    (format "// ## PRE ~a: ~a, ~a, ~a, ~a\n"
-                           varname lower upper lower_inc upper_inc))
-                    varname lower upper lower_inc upper_inc)
+                  (map (lambda (varname lower upper)
+                    (format "// ## PRE ~a: ~a, ~a\n"
+                           varname lower upper))
+                    varname lower upper)
             "")]
-          [(list (list varname (list (interval lower upper lower_inc upper_inc))) ...)
+          [(list (list varname (list (interval lower upper _ _))) ...)
                  (string-join
-                  (map (lambda (varname lower upper lower_inc upper_inc)
-                    (format "// ## PRE ~a: ~a, ~a, ~a, ~a\n"
-                           varname lower upper lower_inc upper_inc))
-                    varname lower upper lower_inc upper_inc)
+                  (map (lambda (varname lower upper)
+                    (format "// ## PRE ~a: ~a, ~a\n"
+                           varname lower upper))
+                    varname lower upper)
             "")]))]
     [(list 'FPCore name (list args ...) props ... body)
      (let-values ([(_ properties) (parse-properties props)])
@@ -76,19 +76,19 @@
                (dict-ref properties ':pre 'TRUE)))
        (define range-table (condition->range-table pre))
        (match range-table
-          [(hash-table (varname (list (interval lower upper lower_inc upper_inc))) ...)
+          [(hash-table (varname (list (interval lower upper _ _))) ...)
                  (string-join
-                  (map (lambda (varname lower upper lower_inc upper_inc)
-                    (format "// ## PRE ~a: ~a, ~a, ~a, ~a\n"
-                           varname lower upper lower_inc upper_inc))
-                    varname lower upper lower_inc upper_inc)
+                  (map (lambda (varname lower upper)
+                    (format "// ## PRE ~a: ~a, ~a\n"
+                           varname lower upper))
+                    varname lower upper)
             "")]
-          [(list (list varname (list (interval lower upper lower_inc upper_inc))) ...)
+          [(list (list varname (list (interval lower upper _ _))) ...)
                  (string-join
-                  (map (lambda (varname lower upper lower_inc upper_inc)
-                    (format "// ## PRE ~a: ~a, ~a, ~a, ~a\n"
-                           varname lower upper lower_inc upper_inc))
-                    varname lower upper lower_inc upper_inc)
+                  (map (lambda (varname lower upper)
+                    (format "// ## PRE ~a: ~a, ~a\n"
+                           varname lower upper))
+                    varname lower upper)
             "")]))]))
 
 (define (export-main argv stdin-port stdout-port)
