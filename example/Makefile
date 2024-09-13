@@ -20,7 +20,7 @@ FPOPTFLAGS += -mllvm --enzyme-enable-fpopt \
 
 SRC ?= example.c
 LOGGER ?= fp-logger.cpp
-EXE ?= example-logged.exe
+EXE ?= example.exe example-logged.exe example-fpopt.exe
 
 .PHONY: all clean
 
@@ -38,7 +38,10 @@ example.exe: example.cpp
 example-logged.exe: example-logged.cpp $(LOGGER)
 	$(CXX) -Wall -O3 $(LOGGER) example-logged.cpp $(CXXFLAGS) -o $@
 
-example-fpopt.exe: example.cpp
+example.txt: example-logged.exe
+	./example-logged.exe > $@
+
+example-fpopt.exe: example.cpp example.txt
 	$(CXX) example.cpp $(CXXFLAGS) $(FPOPTFLAGS) -o $@
 
 clean:
