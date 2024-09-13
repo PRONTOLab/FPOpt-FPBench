@@ -15,7 +15,7 @@ CXXFLAGS = -I/home/brant/include \
 FPOPTFLAGS += -mllvm --enzyme-enable-fpopt \
 		   -mllvm --enzyme-print-herbie \
 		   -mllvm --enzyme-print-fpopt \
-		   -mllvm --fpopt-log-path=enzyme.txt \
+		   -mllvm --fpopt-log-path=example.txt \
 		   -mllvm --fpopt-target-func-regex=Pendulum
 
 SRC ?= example.c
