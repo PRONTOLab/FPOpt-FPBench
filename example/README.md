@@ -14,5 +14,5 @@
 4. `fpopt-enable-solver`: Use the solver to select desirable rewrite candidates; when disabled, apply all Herbie's top choices
 5. `fpopt-solver-type`: Which solver to use ("dp" or "greedy")
 6. `fpopt-comp-cost-budget`: The maximum computation cost budget for the solver (default=100000000000)
-7. `herbie-disable-taylor`: Disable Herbie's series expansion (try this when the output program exhibits unexpected behaviors, e.g., in LULESH)
+7. `herbie-disable-taylor`: Disable Herbie's series expansion (try this when the output program exhibits unexpected behaviors, e.g., optimized LULESH does not terminate without this flag)
 
