@@ -1,4 +1,4 @@
-ENZYME_PATH ?= /home/brant/Enzyme/build/Enzyme/ClangEnzyme-15.so
+ENZYME_PATH ?= /home/brant/sync/Enzyme/build/Enzyme/ClangEnzyme-15.so
 LLVM_PATH ?= /home/brant/llvms/llvm15/build/bin
 CXX = $(LLVM_PATH)/clang++
 
@@ -16,7 +16,9 @@ FPOPTFLAGS += -mllvm --enzyme-enable-fpopt \
 		   -mllvm --enzyme-print-herbie \
 		   -mllvm --enzyme-print-fpopt \
 		   -mllvm --fpopt-log-path=example.txt \
-		   -mllvm --fpopt-target-func-regex=Pendulum
+		   -mllvm --fpopt-target-func-regex=Pendulum \
+		   -mllvm --fpopt-enable-solver \
+		   -mllvm --fpopt-comp-cost-budget=1000
 
 SRC ?= example.c
 LOGGER ?= fp-logger.cpp
