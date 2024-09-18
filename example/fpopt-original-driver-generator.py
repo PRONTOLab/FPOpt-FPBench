@@ -7,6 +7,7 @@ import numpy as np
 num_samples_per_func = 100
 default_regex = "ex\\d+"
 
+np.random.seed(42)
 
 def parse_bound(bound):
     if "/" in bound:
