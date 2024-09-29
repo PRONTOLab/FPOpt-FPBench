@@ -13,7 +13,7 @@ functions = ["sin", "cos", "tan", "exp", "log", "sqrt", "expm1", "log1p", "cbrt"
 
 precisions = ["double", "float", "half"]
 iterations = 1000000000
-unrolled = 100
+unrolled = 32
 
 precision_to_llvm_type = {
     "double": "double",
@@ -482,8 +482,8 @@ with open(csv_file, "w", newline="") as csvfile:
             try:
                 elapsed_time = compile_and_run(filename, executable)
                 adjusted_time = elapsed_time - baseline_time
-                adjusted_time = max(adjusted_time, 0.0)
-                writer.writerow({"instruction": instr, "precision": precision, "cost": adjusted_time})
+                cost = int(adjusted_time)
+                writer.writerow({"instruction": instr, "precision": precision, "cost": cost})
                 print(f"Benchmarked instruction {instr} with precision {precision}: {adjusted_time:.6f} seconds")
             except subprocess.CalledProcessError as e:
                 print(f"Error compiling or running instruction {instr} for {precision}: {e}")
@@ -501,8 +501,8 @@ with open(csv_file, "w", newline="") as csvfile:
             try:
                 elapsed_time = compile_and_run(filename, executable)
                 adjusted_time = elapsed_time - baseline_time
-                adjusted_time = max(adjusted_time, 0.0)
-                writer.writerow({"instruction": func, "precision": precision, "cost": adjusted_time})
+                cost = int(adjusted_time)
+                writer.writerow({"instruction": func, "precision": precision, "cost": cost})
                 print(f"Benchmarked function {func} with precision {precision}: {adjusted_time:.6f} seconds")
             except subprocess.CalledProcessError as e:
                 print(f"Error compiling or running function {func} for {precision}: {e}")
