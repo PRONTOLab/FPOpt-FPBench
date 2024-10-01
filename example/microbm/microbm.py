@@ -416,7 +416,7 @@ def generate_llvm_function_call(function_name, precision, iterations):
             f"call fast {llvm_type} @{function_intrinsic}({llvm_type} {{arg1}}, {llvm_type} {{arg2}})"
         )
     elif function_name == "fmuladd":
-        function_intrinsic = f"llvm.fma.{intrinsic_suffix}"
+        function_intrinsic = f"llvm.fmuladd.{intrinsic_suffix}"
         code += f"declare {llvm_type} @{function_intrinsic}({llvm_type}, {llvm_type}, {llvm_type})\n"
         function_call_template = f"call fast {llvm_type} @{function_intrinsic}({llvm_type} {{arg1}}, {llvm_type} {{arg2}}, {llvm_type} {{arg3}})"
     elif function_name in functions_with_intrinsics:
