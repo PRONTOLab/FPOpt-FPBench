@@ -12,7 +12,7 @@ instructions = ["fneg", "fadd", "fsub", "fmul", "fdiv", "fcmp", "fptrunc", "fpex
 functions = ["sin", "cos", "tan", "exp", "log", "sqrt", "expm1", "log1p", "cbrt", "pow", "fabs", "hypot", "fmuladd"]
 
 precisions = ["bf16", "half", "float", "double", "fp80", "fp128"]
-iterations = 10
+iterations = 1000000000
 unrolled = 32
 
 precision_to_llvm_type = {
@@ -558,6 +558,10 @@ with open(csv_file, "w", newline="") as csvfile:
                 else:
                     dst_precisions = [p for p in precisions_ordered if precision_ranks[p] > src_rank]
                 for dst_precision in dst_precisions:
+                    if (src_precision == "half" and dst_precision == "bf16") or (
+                        src_precision == "bf16" and dst_precision == "half"
+                    ):
+                        continue
                     llvm_code = generate_llvm_code(instr, src_precision, dst_precision, iterations)
                     if not llvm_code.strip():
                         continue
