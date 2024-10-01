@@ -9,25 +9,30 @@ import random
 random.seed(42)
 
 instructions = ["fneg", "fadd", "fsub", "fmul", "fdiv", "fcmp", "fptrunc", "fpext"]
-functions = ["sin", "cos", "tan", "exp", "log", "sqrt", "expm1", "log1p", "cbrt", "pow", "fma", "fabs", "hypot"]
+functions = ["sin", "cos", "tan", "exp", "log", "sqrt", "expm1", "log1p", "cbrt", "pow", "fabs", "hypot", "fmuladd"]
 
-precisions = ["double", "float", "half"]
-iterations = 1000000000
+# precisions = ["double", "float", "half", "fp80", "fp128"]  # , "bf16"
+precisions = ["fp80"]  # , "bf16"
+# iterations = 1000000000
+iterations = 10
 unrolled = 32
 
 precision_to_llvm_type = {
     "double": "double",
     "float": "float",
     "half": "half",
+    "fp80": "x86_fp80",
+    "fp128": "fp128",
 }
 
 precision_to_intrinsic_suffix = {
     "double": "f64",
     "float": "f32",
     "half": "f16",
+    "fp80": "f80",
 }
 
-functions_with_intrinsics = {"sin", "cos", "exp", "log", "sqrt", "pow", "fabs", "fma"}
+functions_with_intrinsics = {"sin", "cos", "exp", "log", "sqrt", "pow", "fabs", "fmuladd"}
 
 
 def float_to_llvm_hex(f, precision):
@@ -49,6 +54,13 @@ def float_to_llvm_hex(f, precision):
         [i] = struct.unpack(">Q", packed)
         hex_str = f"0x{i:016X}"
         return hex_str
+    elif precision == "fp80":
+        f_cast = np.longdouble(f)
+        packed = f_cast.tobytes()
+        i = int.from_bytes(packed, byteorder="big")
+        hex_str = f"0xK{i:020X}"
+        return hex_str
+
     else:
         return str(f)
 
@@ -63,6 +75,9 @@ def generate_random_fp(precision):
     elif precision == "half":
         f = random.uniform(-1e3, 1e3)
         dtype = np.float16
+    elif precision == "fp80":
+        f = random.uniform(-1e10, 1e10)
+        dtype = np.longdouble
     else:
         f = random.uniform(-1e3, 1e3)
         dtype = np.float64
@@ -338,8 +353,8 @@ def generate_llvm_function_call(function_name, precision, iterations):
         function_call_template = (
             f"call fast {llvm_type} @{function_intrinsic}({llvm_type} {{arg1}}, {llvm_type} {{arg2}})"
         )
-    elif function_name == "fma":
-        function_intrinsic = f"llvm.fma.{intrinsic_suffix}"
+    elif function_name == "fmuladd":
+        function_intrinsic = f"llvm.fmuladd.{intrinsic_suffix}"
         code += f"declare {llvm_type} @{function_intrinsic}({llvm_type}, {llvm_type}, {llvm_type})\n"
         function_call_template = f"call fast {llvm_type} @{function_intrinsic}({llvm_type} {{arg1}}, {llvm_type} {{arg2}}, {llvm_type} {{arg3}})"
     elif function_name in functions_with_intrinsics:
@@ -379,7 +394,7 @@ body:
             hex_a = float_to_llvm_hex(a, precision)
             hex_b = float_to_llvm_hex(b, precision)
             function_call = function_call_template.format(arg1=hex_a, arg2=hex_b)
-        elif function_name == "fma":
+        elif function_name == "fmuladd":
             a = generate_random_fp(precision)
             b = generate_random_fp(precision)
             c = generate_random_fp(precision)
@@ -445,13 +460,12 @@ def compile_and_run(ll_filename, executable):
             print(f"Cleaned up assembly file: {asm_filename}")
 
 
-csv_file = "benchmark_results.csv"
+csv_file = "cm.csv"
 # baseline_time = 0.0
 
 with open(csv_file, "w", newline="") as csvfile:
     fieldnames = ["instruction", "precision", "cost"]
     writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-    writer.writeheader()
 
     print("Benchmarking baseline")
     llvm_code = generate_baseline_code(iterations)
