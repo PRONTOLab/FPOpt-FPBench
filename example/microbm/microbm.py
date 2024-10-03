@@ -9,11 +9,12 @@ import random
 random.seed(42)
 
 instructions = ["fneg", "fadd", "fsub", "fmul", "fdiv", "fcmp", "fptrunc", "fpext"]
-functions = ["sin", "cos", "tan", "exp", "log", "sqrt", "expm1", "log1p", "cbrt", "pow", "fabs", "hypot", "fmuladd"]
+functions = ["sin", "cos", "tan", "exp", "log", "sqrt", "expm1", "log1p", "cbrt", "pow", "fabs", "hypot", "fma"]
 
-precisions = ["bf16", "half", "float", "double", "fp80", "fp128"]
+precisions = ["float", "double", "fp80", "fp128"]
+# precisions = ["bf16", "half", "float", "double", "fp80", "fp128"]
 iterations = 1000000000
-unrolled = 32
+unrolled = 8
 
 precision_to_llvm_type = {
     "double": "double",
@@ -517,13 +518,13 @@ def compile_and_run(ll_filename, executable):
         print(f"An error occurred during compilation or execution: {e}")
         raise
 
-    finally:
-        if os.path.exists(asm_filename):
-            os.remove(asm_filename)
-            print(f"Cleaned up assembly file: {asm_filename}")
+    # finally:
+    #     if os.path.exists(asm_filename):
+    #         os.remove(asm_filename)
+    #         print(f"Cleaned up assembly file: {asm_filename}")
 
 
-csv_file = "cm.csv"
+csv_file = "results.csv"
 
 with open(csv_file, "w", newline="") as csvfile:
     fieldnames = ["instruction", "precision", "cost"]
@@ -554,9 +555,13 @@ with open(csv_file, "w", newline="") as csvfile:
                 if src_rank is None:
                     continue
                 if instr == "fptrunc":
-                    dst_precisions = [p for p in precisions_ordered if precision_ranks[p] < src_rank]
+                    dst_precisions = [
+                        p for p in precisions_ordered if p in precisions and precision_ranks[p] < src_rank
+                    ]
                 else:
-                    dst_precisions = [p for p in precisions_ordered if precision_ranks[p] > src_rank]
+                    dst_precisions = [
+                        p for p in precisions_ordered if p in precisions and precision_ranks[p] > src_rank
+                    ]
                 for dst_precision in dst_precisions:
                     if (src_precision == "half" and dst_precision == "bf16") or (
                         src_precision == "bf16" and dst_precision == "half"
