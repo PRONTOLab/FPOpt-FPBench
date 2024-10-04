@@ -3,29 +3,19 @@
 #define TRUE 1
 #define FALSE 0
 
-// ## PRE t0: -2, 2
-// ## PRE w0: -5, 5
-// ## PRE N: 1000, 1000
-double Pendulum(double t0, double w0, double N) {
-	double h = 0.01;
-	double L = 2.0;
-	double m = 1.5;
-	double g = 9.80665;
-	double t = t0;
-	double w = w0;
-	double n = 0.0;
-	int tmp = n < N;
-	while (tmp) {
-		double k1w = (-g / L) * sin(t);
-		double k2t = w + ((h / 2.0) * k1w);
-		double t_1 = t + (h * k2t);
-		double k2w = (-g / L) * sin((t + ((h / 2.0) * w)));
-		double w_2 = w + (h * k2w);
-		double n_3 = n + 1.0;
-		t = t_1;
-		w = w_2;
-		n = n_3;
-		tmp = n < N;
-	}
-	return t;
+// ## PRE c: 1, 9
+// ## PRE a: 1, 9
+// ## PRE b: 1, 9
+double example(double a, double b, double c) {
+  double tmp;
+  if (a < b) {
+    tmp = sqrt(((((c + (b + a)) * (a - (c - b))) * (a + (c - b))) *
+                (c + (b - a)))) /
+          4.0;
+  } else {
+    tmp = sqrt(((((c + (a + b)) * (b - (c - a))) * (b + (c - a))) *
+                (c + (a - b)))) /
+          4.0;
+  }
+  return tmp;
 }

@@ -16,9 +16,12 @@ FPOPTFLAGS += -mllvm --enzyme-enable-fpopt \
 		   -mllvm --enzyme-print-herbie \
 		   -mllvm --enzyme-print-fpopt \
 		   -mllvm --fpopt-log-path=example.txt \
-		   -mllvm --fpopt-target-func-regex=Pendulum \
+		   -mllvm --fpopt-target-func-regex=example \
 		   -mllvm --fpopt-enable-solver \
-		   -mllvm --fpopt-comp-cost-budget=1000
+		   -mllvm --fpopt-enable-pt \
+		   -mllvm --fpopt-comp-cost-budget=0 \
+		   -mllvm --fpopt-num-samples=1000 \
+		   -mllvm --fpopt-cost-model-path=microbm/cm.csv
 
 SRC ?= example.c
 LOGGER ?= fp-logger.cpp
@@ -29,10 +32,10 @@ EXE ?= example.exe example-logged.exe example-fpopt.exe
 all: $(EXE)
 
 example.cpp: $(SRC)
-	python3 fpopt-original-driver-generator.py $(SRC) "Pendulum"
+	python3 fpopt-original-driver-generator.py $(SRC) example
 
 example-logged.cpp: $(SRC)
-	python3 fpopt-logged-driver-generator.py $(SRC) "Pendulum"
+	python3 fpopt-logged-driver-generator.py $(SRC) example
 
 example.exe: example.cpp
 	$(CXX) -Wall -O3 example.cpp $(CXXFLAGS) -o $@
