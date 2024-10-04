@@ -21,7 +21,7 @@ FPOPTFLAGS += -mllvm --enzyme-enable-fpopt \
 		   -mllvm --fpopt-enable-pt \
 		   -mllvm --fpopt-comp-cost-budget=0 \
 		   -mllvm --fpopt-num-samples=1000 \
-		   -mllvm --fpopt-cost-model-path=microbm/cm.csv
+		   -mllvm --fpopt-cost-model-path=../microbm/cm.csv
 
 SRC ?= example.c
 LOGGER ?= fp-logger.cpp
