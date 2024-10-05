@@ -6,12 +6,14 @@ import struct
 import numpy as np
 import random
 
+import mpmath
+
 random.seed(42)
 
 instructions = ["fneg", "fadd", "fsub", "fmul", "fdiv", "fcmp", "fptrunc", "fpext"]
 functions = ["sin", "cos", "tan", "exp", "log", "sqrt", "expm1", "log1p", "cbrt", "pow", "fabs", "hypot", "fma"]
 
-precisions = ["float", "double", "fp80", "fp128"]
+precisions = ["float", "double"]
 # precisions = ["bf16", "half", "float", "double", "fp80", "fp128"]
 iterations = 1000000000
 unrolled = 8
@@ -58,6 +60,73 @@ def get_zero_literal(precision):
         return "0.0"
 
 
+def float64_to_fp80_bytes(value: np.float64) -> bytes:
+    packed = struct.pack(">d", value)
+    (bits,) = struct.unpack(">Q", packed)
+
+    sign = (bits >> 63) & 0x1
+    exponent = (bits >> 52) & 0x7FF
+    mantissa = bits & 0xFFFFFFFFFFFFF
+
+    if exponent == 0:
+        if mantissa == 0:
+            # Zero
+            fp80_exponent = 0
+            fp80_mantissa = 0
+        else:
+            shift = 0
+            while (mantissa & (1 << 52)) == 0:
+                mantissa <<= 1
+                shift += 1
+            exponent = 1 - shift
+            exponent_bias_64 = 1023
+            exponent_bias_80 = 16383
+            fp80_exponent = exponent - exponent_bias_64 + exponent_bias_80
+            fp80_mantissa = mantissa << (63 - 52)
+    elif exponent == 0x7FF:
+        fp80_exponent = 0x7FFF
+        if mantissa == 0:
+            fp80_mantissa = 0x8000000000000000  
+        else:
+            fp80_mantissa = 0xC000000000000000 | (mantissa << (63 - 52))
+    else:
+        exponent_bias_64 = 1023
+        exponent_bias_80 = 16383
+        fp80_exponent = exponent - exponent_bias_64 + exponent_bias_80
+        fp80_mantissa = (0x8000000000000000) | (mantissa << (63 - 52))
+
+    exponent_sign = (sign << 15) | fp80_exponent  
+    fp80_bits = (exponent_sign << 64) | fp80_mantissa
+    fp80_bytes = fp80_bits.to_bytes(10, byteorder="big")
+
+    return fp80_bytes
+
+
+def float64_to_fp128_bytes(value: np.float64) -> bytes:
+    packed = struct.pack(">d", value)
+    (bits,) = struct.unpack(">Q", packed)
+
+    sign = (bits >> 63) & 0x1
+    exponent = (bits >> 52) & 0x7FF
+    mantissa = bits & 0xFFFFFFFFFFFFF
+
+    if exponent == 0:
+        fp128_exponent = 0
+    elif exponent == 0x7FF:
+        fp128_exponent = 0x7FFF
+    else:
+        exponent_bias_64 = 1023
+        exponent_bias_128 = 16383
+        fp128_exponent = exponent - exponent_bias_64 + exponent_bias_128
+
+    fp128_mantissa = mantissa << 60
+    fp128_bits = (sign << 127) | (fp128_exponent << 112) | fp128_mantissa
+
+    fp128_bytes = fp128_bits.to_bytes(16, byteorder="big")
+
+    return fp128_bytes
+
+
 def float_to_llvm_hex(f, precision):
     if precision == "double":
         f_cast = np.float64(f)
@@ -84,31 +153,16 @@ def float_to_llvm_hex(f, precision):
         hex_str = f"0xR{bf16_bits:04X}"
         return hex_str
     elif precision == "fp80":
-        f_cast = np.longdouble(f)
-        packed = f_cast.tobytes()
-        if len(packed) >= 10:
-            ten_bytes = packed[:10]
-            i = int.from_bytes(ten_bytes, byteorder="big")
-            hex_str = f"0xK{i:020X}"
-            return hex_str
-        else:
-            hex_str = "0xK00000000000000000000"
-            return hex_str
+        f_cast = np.float64(f)
+        fp80_bytes = float64_to_fp80_bytes(f_cast)
+        hex_str = f"0xK{fp80_bytes.hex().upper()}"
+        return hex_str
     elif precision == "fp128":
-        try:
-            f_cast = np.float128(f)
-            packed = f_cast.tobytes()
-            if len(packed) >= 16:
-                sixteen_bytes = packed[:16]
-                i = int.from_bytes(sixteen_bytes, byteorder="big")
-                hex_str = f"0xL{i:032X}"
-                return hex_str
-            else:
-                hex_str = "0xL00000000000000000000000000000000"
-                return hex_str
-        except AttributeError:
-            hex_str = "0xL00000000000000000000000000000000"
-            return hex_str
+        f_cast = np.float64(f)
+        fp128_bytes = float64_to_fp128_bytes(f_cast)
+        swapped = fp128_bytes[8:] + fp128_bytes[:8]
+        hex_str = f"0xL{swapped.hex().upper()}"
+        return hex_str
     else:
         return str(f)
 
@@ -128,13 +182,10 @@ def generate_random_fp(precision):
         dtype = np.float32  # Use float32 for bf16
     elif precision == "fp80":
         f = random.uniform(-1e10, 1e10)
-        dtype = np.longdouble
+        dtype = np.float64
     elif precision == "fp128":
         f = random.uniform(-1e10, 1e10)
-        try:
-            dtype = np.float128
-        except AttributeError:
-            dtype = np.float64  # Fallback
+        dtype = np.float64
     else:
         f = random.uniform(-1e3, 1e3)
         dtype = np.float64
