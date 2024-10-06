@@ -14,6 +14,7 @@ LLVM_PATH = "/home/brant/llvms/llvm15/build/bin"
 CXX = os.path.join(LLVM_PATH, "clang++")
 
 CXXFLAGS = [
+    "-O3",
     "-I/home/brant/include",
     "-L/home/brant/lib",
     "-I/usr/include/c++/11",
@@ -26,7 +27,6 @@ CXXFLAGS = [
     "-Xclang",
     ENZYME_PATH,
     "-lmpfr",
-    "-O3",
     "-ffast-math",
     "-fuse-ld=lld",
 ]
@@ -116,14 +116,14 @@ def generate_example_logged_cpp():
 def compile_example_exe():
     source = "example.cpp"
     output = "example.exe"
-    cmd = [CXX, "-Wall", "-O3", source] + CXXFLAGS + ["-o", output]
+    cmd = [CXX, source] + CXXFLAGS + ["-o", output]
     run_command(cmd, f"Compiling {output}")
 
 
 def compile_example_logged_exe():
     sources = ["example-logged.cpp", LOGGER]
     output = "example-logged.exe"
-    cmd = [CXX, "-Wall", "-O3"] + sources + CXXFLAGS + ["-o", output]
+    cmd = [CXX, ] + sources + CXXFLAGS + ["-o", output]
     run_command(cmd, f"Compiling {output}")
 
 
