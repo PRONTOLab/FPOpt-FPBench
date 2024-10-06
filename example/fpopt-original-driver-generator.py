@@ -91,7 +91,6 @@ def create_driver_function(functions, num_samples_per_func):
             call_params.append(param_value)
 
         driver_code.append(f"        res += {func_name}({', '.join(call_params)});")
-        driver_code.append("        std::cout << res << std::endl;")
         driver_code.append("    }")
         driver_code.append("")
 
