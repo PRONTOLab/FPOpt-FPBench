@@ -61,6 +61,8 @@ def main():
         print("No .fpcore files found in the benchmarks directory.")
         return
 
+    os.makedirs("tmp", exist_ok=True)
+
     for fpcore_file in fpcore_files:
         filename = os.path.basename(fpcore_file)
         base_name = os.path.splitext(filename)[0]
@@ -93,25 +95,24 @@ def main():
             comments = func["comments"]
 
             print(f"Processing function: {func_name}")
+
+            prefix = f"{base_name}-{func_name}-"
+
+            example_c_filename = f"{prefix}example.c"
+            example_c_filepath = os.path.join("tmp", example_c_filename)
+
             func_body_lines = func["func_body"].split("\n")
-            
+
             func_signature_line = f"__attribute__((noinline))\n{return_type} example({params}) {{"
-            
+
             func_body_lines[0] = func_signature_line
             func_code = comments + "\n" + "\n".join(func_body_lines)
             includes = "#include <math.h>\n#include <stdint.h>\n#define TRUE 1\n#define FALSE 0\n"
             example_c_content = includes + "\n" + func_code
-            with open("example.c", "w") as f:
+            with open(example_c_filepath, "w") as f:
                 f.write(example_c_content)
             try:
-                # print("Target func: ", example_c_content)
-                subprocess.check_call(["python3", "run.py"])
-                plot_filename = f"runtime_plot_{base_name}_{func_name}.png"
-                if os.path.exists("runtime_plot.png"):
-                    os.rename("runtime_plot.png", plot_filename)
-                    print(f"Plot saved to {plot_filename}")
-                else:
-                    print("Plot not found after running run.py")
+                subprocess.check_call(["python3", "run.py", "--prefix", prefix])
             except subprocess.CalledProcessError as e:
                 print(f"Error running run.py for function {func_name} in file {c_filename}")
                 continue

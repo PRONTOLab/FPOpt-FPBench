@@ -6,6 +6,7 @@ import sys
 import shutil
 import time
 import re
+import argparse
 import matplotlib.pyplot as plt
 from statistics import mean
 
@@ -85,71 +86,118 @@ def run_command(command, description, capture_output=False, output_file=None, ve
         sys.exit(e.returncode)
 
 
-def clean():
+def clean(tmp_dir, logs_dir, prefix):
     print("=== Cleaning up generated files ===")
-    for exe in EXE + ["example-baseline.exe"]:
+    exe_files = [
+        os.path.join(tmp_dir, f"{prefix}example.exe"),
+        os.path.join(tmp_dir, f"{prefix}example-logged.exe"),
+        os.path.join(tmp_dir, f"{prefix}example-baseline.exe"),
+        os.path.join(tmp_dir, f"{prefix}example-fpopt.exe"),
+    ]
+    cpp_files = [
+        os.path.join(tmp_dir, f"{prefix}example.cpp"),
+        os.path.join(tmp_dir, f"{prefix}example-logged.cpp"),
+        os.path.join(tmp_dir, f"{prefix}example-baseline.cpp"),
+    ]
+    log_files = [
+        os.path.join(logs_dir, f"{prefix}compile_fpopt.log"),
+    ]
+    output_txt = os.path.join(tmp_dir, f"{prefix}example.txt")
+    runtime_plot = os.path.join("plots", f"runtime_plot_{prefix[:-1]}.png")
+
+    for exe in exe_files:
         if os.path.exists(exe):
             os.remove(exe)
             print(f"Removed {exe}")
-    for cpp in ["example.cpp", "example-logged.cpp", "example-baseline.cpp"]:
+    for cpp in cpp_files:
         if os.path.exists(cpp):
             os.remove(cpp)
             print(f"Removed {cpp}")
-    for file in ["example.txt", "output.txt", "runtime_plot.png", "compile_fpopt.log"]:
-        if os.path.exists(file):
-            os.remove(file)
-            print(f"Removed {file}")
+    for log in log_files:
+        if os.path.exists(log):
+            os.remove(log)
+            print(f"Removed {log}")
+    if os.path.exists(output_txt):
+        os.remove(output_txt)
+        print(f"Removed {output_txt}")
+    if os.path.exists(runtime_plot):
+        os.remove(runtime_plot)
+        print(f"Removed {runtime_plot}")
 
 
-def generate_example_cpp():
+def generate_example_cpp(tmp_dir, prefix):
     script = "fpopt-original-driver-generator.py"
-    output = "example.cpp"
-    run_command(["python3", script, SRC, "example", str(DRIVER_NUM_SAMPLES)], f"Generating {output} from {SRC}")
+    print(f"=== Running {script} ===")
+    run_command(["python3", script, SRC, "example", str(DRIVER_NUM_SAMPLES)], f"Generating example.cpp from {SRC}")
+    generated_cpp = "example.cpp"
+    src_path = generated_cpp
+    dest_path = os.path.join(tmp_dir, f"{prefix}example.cpp")
+    if os.path.exists(src_path):
+        shutil.move(src_path, dest_path)
+        print(f"Moved {generated_cpp} to {dest_path}")
+    else:
+        print(f"Expected generated file {generated_cpp} not found.")
+        sys.exit(1)
 
 
-def generate_example_logged_cpp():
+def generate_example_logged_cpp(tmp_dir, prefix):
     script = "fpopt-logged-driver-generator.py"
-    output = "example-logged.cpp"
-    run_command(["python3", script, SRC, "example", str(DRIVER_NUM_SAMPLES)], f"Generating {output} from {SRC}")
-
-
-def generate_example_baseline_cpp():
-    script = "fpopt-baseline-generator.py"
-    output = "example-baseline.cpp"
-    run_command(["python3", script, SRC, "example", str(DRIVER_NUM_SAMPLES)], f"Generating {output} from {SRC}")
-
-
-def compile_example_exe():
-    source = "example.cpp"
-    output = "example.exe"
-    cmd = [CXX, source] + CXXFLAGS + ["-o", output]
-    run_command(cmd, f"Compiling {output}")
-
-
-def compile_example_logged_exe():
-    sources = ["example-logged.cpp", LOGGER]
-    output = "example-logged.exe"
-    cmd = (
-        [
-            CXX,
-        ]
-        + sources
-        + CXXFLAGS
-        + ["-o", output]
+    print(f"=== Running {script} ===")
+    run_command(
+        ["python3", script, SRC, "example", str(DRIVER_NUM_SAMPLES)], f"Generating example-logged.cpp from {SRC}"
     )
-    run_command(cmd, f"Compiling {output}")
+    generated_cpp = "example-logged.cpp"
+    src_path = generated_cpp
+    dest_path = os.path.join(tmp_dir, f"{prefix}example-logged.cpp")
+    if os.path.exists(src_path):
+        shutil.move(src_path, dest_path)
+        print(f"Moved {generated_cpp} to {dest_path}")
+    else:
+        print(f"Expected generated file {generated_cpp} not found.")
+        sys.exit(1)
 
 
-def compile_example_baseline_exe():
-    source = "example-baseline.cpp"
-    output = "example-baseline.exe"
+def generate_example_baseline_cpp(tmp_dir, prefix):
+    script = "fpopt-baseline-generator.py"
+    print(f"=== Running {script} ===")
+    run_command(
+        ["python3", script, SRC, "example", str(DRIVER_NUM_SAMPLES)], f"Generating example-baseline.cpp from {SRC}"
+    )
+    generated_cpp = "example-baseline.cpp"
+    src_path = generated_cpp
+    dest_path = os.path.join(tmp_dir, f"{prefix}example-baseline.cpp")
+    if os.path.exists(src_path):
+        shutil.move(src_path, dest_path)
+        print(f"Moved {generated_cpp} to {dest_path}")
+    else:
+        print(f"Expected generated file {generated_cpp} not found.")
+        sys.exit(1)
+
+
+def compile_example_exe(tmp_dir, prefix):
+    source = os.path.join(tmp_dir, f"{prefix}example.cpp")
+    output = os.path.join(tmp_dir, f"{prefix}example.exe")
     cmd = [CXX, source] + CXXFLAGS + ["-o", output]
     run_command(cmd, f"Compiling {output}")
 
 
-def generate_example_txt():
-    exe = "./example-logged.exe"
-    output = "example.txt"
+def compile_example_logged_exe(tmp_dir, prefix):
+    source = os.path.join(tmp_dir, f"{prefix}example-logged.cpp")
+    output = os.path.join(tmp_dir, f"{prefix}example-logged.exe")
+    cmd = [CXX, source, LOGGER] + CXXFLAGS + ["-o", output]
+    run_command(cmd, f"Compiling {output}")
+
+
+def compile_example_baseline_exe(tmp_dir, prefix):
+    source = os.path.join(tmp_dir, f"{prefix}example-baseline.cpp")
+    output = os.path.join(tmp_dir, f"{prefix}example-baseline.exe")
+    cmd = [CXX, source] + CXXFLAGS + ["-o", output]
+    run_command(cmd, f"Compiling {output}")
+
+
+def generate_example_txt(tmp_dir, prefix):
+    exe = os.path.join(tmp_dir, f"{prefix}example-logged.exe")
+    output = os.path.join(tmp_dir, f"{prefix}example.txt")
     if not os.path.exists(exe):
         print(f"Executable {exe} not found. Cannot generate {output}.")
         sys.exit(1)
@@ -162,31 +210,34 @@ def generate_example_txt():
             sys.exit(e.returncode)
 
 
-def compile_example_fpopt_exe(fpoptflags, output="example-fpopt.exe", verbose=True):
-    source = "example.cpp"
-    cmd = [CXX, source] + CXXFLAGS + fpoptflags + ["-o", output]
+def compile_example_fpopt_exe(tmp_dir, prefix, fpoptflags, output="example-fpopt.exe", verbose=True):
+    source = os.path.join(tmp_dir, f"{prefix}example.cpp")
+    output_path = os.path.join(tmp_dir, f"{prefix}{output}")
+    cmd = [CXX, source] + CXXFLAGS + fpoptflags + ["-o", output_path]
+    log_path = os.path.join("logs", f"{prefix}compile_fpopt.log")
     if output == "example-fpopt.exe":
         run_command(
             cmd,
-            f"Compiling {output} with FPOPTFLAGS",
+            f"Compiling {output_path} with FPOPTFLAGS",
             capture_output=True,
-            output_file="compile_fpopt.log",
+            output_file=log_path,
             verbose=verbose,
         )
     else:
         run_command(
             cmd,
-            f"Compiling {output} with FPOPTFLAGS",
+            f"Compiling {output_path} with FPOPTFLAGS",
             verbose=verbose,
         )
 
 
-def parse_critical_comp_costs(log_path="compile_fpopt.log"):
+def parse_critical_comp_costs(tmp_dir, prefix, log_path="compile_fpopt.log"):
     print(f"=== Parsing critical computation costs from {log_path} ===")
-    if not os.path.exists(log_path):
-        print(f"Log file {log_path} does not exist.")
+    full_log_path = os.path.join("logs", f"{prefix}{log_path}")
+    if not os.path.exists(full_log_path):
+        print(f"Log file {full_log_path} does not exist.")
         sys.exit(1)
-    with open(log_path, "r") as f:
+    with open(full_log_path, "r") as f:
         content = f.read()
 
     pattern = r"\*\*\* Critical Computation Costs \*\*\*(.*?)\*\*\* End of Critical Computation Costs \*\*\*"
@@ -201,15 +252,16 @@ def parse_critical_comp_costs(log_path="compile_fpopt.log"):
     return costs
 
 
-def measure_runtime(executable, num_runs=NUM_RUNS):
+def measure_runtime(tmp_dir, prefix, executable, num_runs=NUM_RUNS):
     print(f"=== Measuring runtime for {executable} ===")
     runtimes = []
+    exe_path = os.path.join(tmp_dir, f"{prefix}{executable}")
     for i in range(1, num_runs + 1):
         start_time = time.perf_counter()
         try:
-            subprocess.check_call([f"./{executable}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.check_call([exe_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         except subprocess.CalledProcessError as e:
-            print(f"Error running {executable} on run {i}")
+            print(f"Error running {exe_path} on run {i}")
             sys.exit(e.returncode)
         end_time = time.perf_counter()
         runtime = end_time - start_time
@@ -219,56 +271,50 @@ def measure_runtime(executable, num_runs=NUM_RUNS):
     return average_runtime
 
 
-def plot_results(budgets, runtimes, output_file="runtime_plot.png"):
-    print(f"=== Plotting results to {output_file} ===")
+def plot_results(plots_dir, prefix, budgets, runtimes):
+    plot_filename = os.path.join(plots_dir, f"runtime_plot_{prefix[:-1]}.png")
+    print(f"=== Plotting results to {plot_filename} ===")
     plt.figure(figsize=(10, 6))
     plt.plot(budgets, runtimes, marker="o", linestyle="-")
     plt.xlabel("Computation Cost Budget")
     plt.ylabel("Average Runtime (seconds)")
     plt.title("Computation Cost Budget vs. Denoised Average Runtime")
     plt.grid(True)
-    plt.savefig(output_file)
+    plt.savefig(plot_filename)
     plt.close()
-    print(f"Plot saved to {output_file}")
+    print(f"Plot saved to {plot_filename}")
 
 
-def build_all():
-    generate_example_cpp()
-    generate_example_logged_cpp()
-    generate_example_baseline_cpp()
-    compile_example_exe()
-    compile_example_logged_exe()
-    compile_example_baseline_exe()
-    generate_example_txt()
-    compile_example_fpopt_exe(FPOPTFLAGS_BASE, output="example-fpopt.exe")
+def build_all(tmp_dir, logs_dir, prefix):
+    generate_example_cpp(tmp_dir, prefix)
+    generate_example_logged_cpp(tmp_dir, prefix)
+    generate_example_baseline_cpp(tmp_dir, prefix)
+    compile_example_exe(tmp_dir, prefix)
+    compile_example_logged_exe(tmp_dir, prefix)
+    compile_example_baseline_exe(tmp_dir, prefix)
+    generate_example_txt(tmp_dir, prefix)
+    fpoptflags = []
+    for flag in FPOPTFLAGS_BASE:
+        if flag.startswith("--fpopt-log-path="):
+            fpoptflags.append(f"--fpopt-log-path=tmp/{prefix}example.txt")
+        else:
+            fpoptflags.append(flag)
+    compile_example_fpopt_exe(tmp_dir, prefix, fpoptflags, output="example-fpopt.exe")
     print("=== Initial build process completed successfully ===")
 
 
-def measure_baseline_runtime(num_runs=NUM_RUNS):
-    executable = "example-baseline.exe"
-    if not os.path.exists(executable):
-        print(f"{executable} not found. Please build it first.")
-        sys.exit(1)
-    avg_runtime = measure_runtime(executable, num_runs)
+def measure_baseline_runtime(tmp_dir, prefix, num_runs=NUM_RUNS):
+    executable = f"example-baseline.exe"
+    exe_path = os.path.join(tmp_dir, executable)
+    avg_runtime = measure_runtime(tmp_dir, prefix, executable, num_runs)
+    print(f"Baseline average runtime: {avg_runtime:.4f} seconds")
     return avg_runtime
 
 
-def benchmark():
-    if not os.path.exists("example-fpopt.exe"):
-        print("example-fpopt.exe not found. Please build it first.")
-        sys.exit(1)
+def benchmark(tmp_dir, logs_dir, prefix, plots_dir):
+    costs = parse_critical_comp_costs(tmp_dir, prefix)
 
-    print("=== Running example-fpopt.exe and saving output to output.txt ===")
-    run_command(
-        ["./example-fpopt.exe"],
-        "Running example-fpopt.exe and saving output to output.txt",
-        capture_output=True,
-        output_file="output.txt",
-    )
-
-    costs = parse_critical_comp_costs("compile_fpopt.log")
-
-    baseline_runtime = measure_baseline_runtime(NUM_RUNS)
+    baseline_runtime = measure_baseline_runtime(tmp_dir, prefix, NUM_RUNS)
     print(f"Baseline average runtime: {baseline_runtime:.4f} seconds")
 
     budgets = []
@@ -280,49 +326,65 @@ def benchmark():
         for flag in FPOPTFLAGS_BASE:
             if flag.startswith("--fpopt-comp-cost-budget="):
                 fpoptflags.append(f"--fpopt-comp-cost-budget={cost}")
+            elif flag.startswith("--fpopt-log-path="):
+                fpoptflags.append(f"--fpopt-log-path=tmp/{prefix}example.txt")
             else:
                 fpoptflags.append(flag)
 
         output_binary = f"example-fpopt-{cost}.exe"
 
-        compile_example_fpopt_exe(fpoptflags, output=output_binary, verbose=False)
+        compile_example_fpopt_exe(tmp_dir, prefix, fpoptflags, output=output_binary, verbose=False)
 
-        avg_runtime = measure_runtime(output_binary, NUM_RUNS)
+        avg_runtime = measure_runtime(tmp_dir, prefix, output_binary, NUM_RUNS)
 
         adjusted_runtime = avg_runtime - baseline_runtime
 
         budgets.append(cost)
         runtimes.append(adjusted_runtime)
 
-    plot_results(budgets, runtimes)
+    plot_results(plots_dir, prefix, budgets, runtimes)
 
 
-def build_with_benchmark():
-    build_all()
-    benchmark()
+def build_with_benchmark(tmp_dir, logs_dir, plots_dir, prefix):
+    build_all(tmp_dir, logs_dir, prefix)
+    benchmark(tmp_dir, logs_dir, prefix, plots_dir)
 
 
 def main():
-    if len(sys.argv) > 1:
-        target = sys.argv[1]
-        if target == "clean":
-            clean()
-            sys.exit(0)
-        elif target == "build":
-            build_all()
-            sys.exit(0)
-        elif target == "benchmark":
-            benchmark()
-            sys.exit(0)
-        elif target == "all":
-            build_with_benchmark()
-            sys.exit(0)
-        else:
-            print(f"Unknown target: {target}")
-            print("Usage: run.py [build|clean|benchmark|all]")
-            sys.exit(1)
+    parser = argparse.ArgumentParser(description="Run the example C code with prefix handling.")
+    parser.add_argument("--prefix", type=str, required=True, help="Prefix for intermediate files (e.g., rosa-ex23-)")
+    parser.add_argument("--clean", action="store_true", help="Clean up generated files")
+    parser.add_argument("--build", action="store_true", help="Build all components")
+    parser.add_argument("--benchmark", action="store_true", help="Run benchmark")
+    parser.add_argument("--all", action="store_true", help="Build and run benchmark")
+    args = parser.parse_args()
+
+    prefix = args.prefix
+    if not prefix.endswith("-"):
+        prefix += "-"
+
+    tmp_dir = "tmp"
+    logs_dir = "logs"
+    plots_dir = "plots"
+
+    os.makedirs(tmp_dir, exist_ok=True)
+    os.makedirs(logs_dir, exist_ok=True)
+    os.makedirs(plots_dir, exist_ok=True)
+
+    if args.clean:
+        clean(tmp_dir, logs_dir, prefix)
+        sys.exit(0)
+    elif args.build:
+        build_all(tmp_dir, logs_dir, prefix)
+        sys.exit(0)
+    elif args.benchmark:
+        benchmark(tmp_dir, logs_dir, prefix, plots_dir)
+        sys.exit(0)
+    elif args.all:
+        build_with_benchmark(tmp_dir, logs_dir, plots_dir, prefix)
+        sys.exit(0)
     else:
-        build_with_benchmark()
+        build_with_benchmark(tmp_dir, logs_dir, plots_dir, prefix)
 
 
 if __name__ == "__main__":

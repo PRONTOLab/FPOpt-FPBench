@@ -16,7 +16,7 @@ functions = ["sin", "cos", "tan", "exp", "log", "sqrt", "expm1", "log1p", "cbrt"
 precisions = ["float", "double"]
 # precisions = ["bf16", "half", "float", "double", "fp80", "fp128"]
 iterations = 1000000000
-unrolled = 8
+unrolled = 32
 
 precision_to_llvm_type = {
     "double": "double",
