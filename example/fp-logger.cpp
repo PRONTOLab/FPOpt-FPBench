@@ -6,6 +6,7 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+#include <cmath>
 
 #include "fp-logger.hpp"
 
@@ -45,9 +46,23 @@ public:
 
 class GradInfo {
 public:
-  double grad = 0.0;
+  double logSum = 0.0;
+  unsigned count = 0;
 
-  void update(double grad) { this->grad = grad; }
+  void update(double grad) {
+    if (grad != 0.) {
+      logSum += std::log(std::fabs(grad));
+      ++count;
+    }
+  }
+
+  double getGeometricAverage() const {
+    if (count > 0) {
+      return std::exp(logSum / count);
+    } else {
+      return 0.0;
+    }
+  }
 };
 
 class Logger {
@@ -102,7 +117,7 @@ public:
       const auto &id = pair.first;
       const auto &info = pair.second;
       std::cout << "Grad:" << id << "\n";
-      std::cout << "\tGrad = " << info.grad << "\n";
+      std::cout << "\tGrad = " << info.getGeometricAverage() << "\n";
     }
   }
 };
