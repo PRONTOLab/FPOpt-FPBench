@@ -57,8 +57,8 @@ FPOPTFLAGS_BASE = [
 SRC = "example.c"
 LOGGER = "fp-logger.cpp"
 EXE = ["example.exe", "example-logged.exe", "example-fpopt.exe"]
-NUM_RUNS = 1000
-DRIVER_NUM_SAMPLES = 1000
+NUM_RUNS = 10
+DRIVER_NUM_SAMPLES = 10000000
 
 
 def run_command(command, description, capture_output=False, output_file=None, verbose=True):
@@ -87,11 +87,11 @@ def run_command(command, description, capture_output=False, output_file=None, ve
 
 def clean():
     print("=== Cleaning up generated files ===")
-    for exe in EXE:
+    for exe in EXE + ["example-baseline.exe"]:
         if os.path.exists(exe):
             os.remove(exe)
             print(f"Removed {exe}")
-    for cpp in ["example.cpp", "example-logged.cpp"]:
+    for cpp in ["example.cpp", "example-logged.cpp", "example-baseline.cpp"]:
         if os.path.exists(cpp):
             os.remove(cpp)
             print(f"Removed {cpp}")
@@ -113,6 +113,12 @@ def generate_example_logged_cpp():
     run_command(["python3", script, SRC, "example", str(DRIVER_NUM_SAMPLES)], f"Generating {output} from {SRC}")
 
 
+def generate_example_baseline_cpp():
+    script = "fpopt-baseline-generator.py"
+    output = "example-baseline.cpp"
+    run_command(["python3", script, SRC, "example", str(DRIVER_NUM_SAMPLES)], f"Generating {output} from {SRC}")
+
+
 def compile_example_exe():
     source = "example.cpp"
     output = "example.exe"
@@ -123,7 +129,21 @@ def compile_example_exe():
 def compile_example_logged_exe():
     sources = ["example-logged.cpp", LOGGER]
     output = "example-logged.exe"
-    cmd = [CXX, ] + sources + CXXFLAGS + ["-o", output]
+    cmd = (
+        [
+            CXX,
+        ]
+        + sources
+        + CXXFLAGS
+        + ["-o", output]
+    )
+    run_command(cmd, f"Compiling {output}")
+
+
+def compile_example_baseline_exe():
+    source = "example-baseline.cpp"
+    output = "example-baseline.exe"
+    cmd = [CXX, source] + CXXFLAGS + ["-o", output]
     run_command(cmd, f"Compiling {output}")
 
 
@@ -185,7 +205,6 @@ def measure_runtime(executable, num_runs=NUM_RUNS):
     print(f"=== Measuring runtime for {executable} ===")
     runtimes = []
     for i in range(1, num_runs + 1):
-        # print(f"Run {i}/{num_runs}")
         start_time = time.perf_counter()
         try:
             subprocess.check_call([f"./{executable}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -195,7 +214,6 @@ def measure_runtime(executable, num_runs=NUM_RUNS):
         end_time = time.perf_counter()
         runtime = end_time - start_time
         runtimes.append(runtime)
-        # print(f"Run {i}: {runtime:.4f} seconds")
     average_runtime = mean(runtimes)
     print(f"Average runtime for {executable}: {average_runtime:.4f} seconds")
     return average_runtime
@@ -207,7 +225,7 @@ def plot_results(budgets, runtimes, output_file="runtime_plot.png"):
     plt.plot(budgets, runtimes, marker="o", linestyle="-")
     plt.xlabel("Computation Cost Budget")
     plt.ylabel("Average Runtime (seconds)")
-    plt.title("Computation Cost Budget vs. Average Runtime")
+    plt.title("Computation Cost Budget vs. Denoised Average Runtime")
     plt.grid(True)
     plt.savefig(output_file)
     plt.close()
@@ -217,11 +235,22 @@ def plot_results(budgets, runtimes, output_file="runtime_plot.png"):
 def build_all():
     generate_example_cpp()
     generate_example_logged_cpp()
+    generate_example_baseline_cpp()
     compile_example_exe()
     compile_example_logged_exe()
+    compile_example_baseline_exe()
     generate_example_txt()
     compile_example_fpopt_exe(FPOPTFLAGS_BASE, output="example-fpopt.exe")
     print("=== Initial build process completed successfully ===")
+
+
+def measure_baseline_runtime(num_runs=NUM_RUNS):
+    executable = "example-baseline.exe"
+    if not os.path.exists(executable):
+        print(f"{executable} not found. Please build it first.")
+        sys.exit(1)
+    avg_runtime = measure_runtime(executable, num_runs)
+    return avg_runtime
 
 
 def benchmark():
@@ -238,6 +267,9 @@ def benchmark():
     )
 
     costs = parse_critical_comp_costs("compile_fpopt.log")
+
+    baseline_runtime = measure_baseline_runtime(NUM_RUNS)
+    print(f"Baseline average runtime: {baseline_runtime:.4f} seconds")
 
     budgets = []
     runtimes = []
@@ -257,8 +289,10 @@ def benchmark():
 
         avg_runtime = measure_runtime(output_binary, NUM_RUNS)
 
+        adjusted_runtime = avg_runtime - baseline_runtime
+
         budgets.append(cost)
-        runtimes.append(avg_runtime)
+        runtimes.append(adjusted_runtime)
 
     plot_results(budgets, runtimes)
 
@@ -285,7 +319,7 @@ def main():
             sys.exit(0)
         else:
             print(f"Unknown target: {target}")
-            print("Usage: build_fpopt.py [build|clean|benchmark|all]")
+            print("Usage: run.py [build|clean|benchmark|all]")
             sys.exit(1)
     else:
         build_with_benchmark()
