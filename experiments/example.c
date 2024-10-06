@@ -6,7 +6,7 @@
 // ## PRE c: 1, 9
 // ## PRE a: 1, 9
 // ## PRE b: 1, 9
-[[clang::noinline]]
+__attribute__((noinline))
 double example(double a, double b, double c) {
   double tmp;
   if (a < b) {

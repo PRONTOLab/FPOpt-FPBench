@@ -94,7 +94,9 @@ def main():
 
             print(f"Processing function: {func_name}")
             func_body_lines = func["func_body"].split("\n")
-            func_signature_line = f"{return_type} example({params}) {{"
+            
+            func_signature_line = f"__attribute__((noinline))\n{return_type} example({params}) {{"
+            
             func_body_lines[0] = func_signature_line
             func_code = comments + "\n" + "\n".join(func_body_lines)
             includes = "#include <math.h>\n#include <stdint.h>\n#define TRUE 1\n#define FALSE 0\n"
