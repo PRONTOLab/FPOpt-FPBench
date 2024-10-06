@@ -46,32 +46,56 @@ def parse_c_file(filepath, func_regex):
 
 
 def create_driver_function(functions, num_samples_per_func):
-    driver_code = ["#include <iostream>"]
-    driver_code.append("int main() {")
-    driver_code.append("    volatile double res;")
+    driver_code = [
+        "#include <iostream>",
+        "#include <random>",
+        "",
+        "int main() {",
+        "    std::mt19937 gen(42);",
+        "",
+    ]
 
     for func_name, bounds, params, return_type in functions:
-        print(f"Generating driver code for {func_name}")
-        for _ in range(num_samples_per_func):
-            call_params = []
-            for param in params:
-                param_tokens = param.strip().split()
-                if len(param_tokens) >= 2:
-                    param_name = param_tokens[-1]
-                else:
-                    exit(f"Cannot parse parameter: {param}")
-                try:
-                    min_val = bounds[param_name]["min"]
-                    max_val = bounds[param_name]["max"]
-                except KeyError:
-                    exit(
-                        f"WARNING: Bounds not found for {param_name} in function {func_name}, manually specify the bounds."
-                    )
-                random_value = np.random.uniform(min_val, max_val)
-                call_params.append(str(random_value))
-            driver_code.append(f"    res = {func_name}({', '.join(call_params)});")
+        for param in params:
+            param_tokens = param.strip().split()
+            if len(param_tokens) >= 2:
+                param_name = param_tokens[-1]
+            else:
+                exit(f"Cannot parse parameter: {param}")
+            try:
+                min_val = bounds[param_name]["min"]
+                max_val = bounds[param_name]["max"]
+            except KeyError:
+                exit(
+                    f"WARNING: Bounds not found for {param_name} in function {func_name}, manually specify the bounds."
+                )
+            dist_name = f"{func_name}_{param_name}_dist"
+            driver_code.append(f"    std::uniform_real_distribution<double> {dist_name}({min_val}, {max_val});")
+    driver_code.append("")
 
-    driver_code.append("    std::cout << res << std::endl;")
+    driver_code.append("    double res = 0.;")
+    driver_code.append("")
+
+    for func_name, bounds, params, return_type in functions:
+        driver_code.append(f"    for (int i = 0; i < {num_samples_per_func}; ++i) {{")
+
+        call_params = []
+        for param in params:
+            param_tokens = param.strip().split()
+            if len(param_tokens) >= 2:
+                param_name = param_tokens[-1]
+            else:
+                exit(f"Cannot parse parameter: {param}")
+            dist_name = f"{func_name}_{param_name}_dist"
+            param_value = f"{dist_name}(gen)"
+            call_params.append(param_value)
+
+        driver_code.append(f"        res += {func_name}({', '.join(call_params)});")
+        driver_code.append("        std::cout << res << std::endl;")
+        driver_code.append("    }")
+        driver_code.append("")
+
+    driver_code.append('    std::cout << "Sum: " << res << std::endl;')
     driver_code.append("    return 0;")
     driver_code.append("}")
     return "\n".join(driver_code)
