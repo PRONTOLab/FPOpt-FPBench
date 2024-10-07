@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import os
 import sys
 import re
@@ -5,7 +7,7 @@ import random
 import numpy as np
 
 DEFAULT_NUM_SAMPLES = 10000
-default_regex = "ex\\d+"
+DEFAULT_REGEX = "ex\\d+"
 
 np.random.seed(42)
 
@@ -101,28 +103,27 @@ def create_driver_function(functions, num_samples_per_func):
 
 
 def main():
-    if len(sys.argv) < 2:
-        exit("Usage: script.py <filepath> [function_regex] [num_samples_per_func (default: 10000)]")
+    if len(sys.argv) < 3:
+        exit(
+            "Usage: fpopt-logged-driver-generator.py <source_path> <dest_path> [func_regex] [num_samples_per_func (default: 10000)]"
+        )
 
-    filepath = sys.argv[1]
-    func_regex = sys.argv[2] if len(sys.argv) > 2 else default_regex
-    num_samples_per_func = int(sys.argv[3]) if len(sys.argv) > 3 else DEFAULT_NUM_SAMPLES
+    source_path = sys.argv[1]
+    dest_path = sys.argv[2]
+    func_regex = sys.argv[3] if len(sys.argv) > 3 else DEFAULT_REGEX
+    num_samples_per_func = int(sys.argv[4]) if len(sys.argv) > 4 else DEFAULT_NUM_SAMPLES
 
-    if len(sys.argv) <= 2:
-        print(f"WARNING: No regex provided for target function names. Using default regex: {default_regex}")
-
-    functions = parse_c_file(filepath, func_regex)
+    functions = parse_c_file(source_path, func_regex)
     driver_code = create_driver_function(functions, num_samples_per_func)
-    new_filepath = os.path.splitext(filepath)[0] + ".cpp"
 
-    with open(filepath, "r") as original_file:
+    with open(source_path, "r") as original_file:
         original_content = original_file.read()
 
-    with open(new_filepath, "w") as new_file:
+    with open(dest_path, "w") as new_file:
         new_file.write(original_content)
         new_file.write("\n\n" + driver_code)
 
-    print(f"Driver function appended to the new file: {new_filepath}")
+    print(f"Driver function appended to the new file: {dest_path}")
 
 
 if __name__ == "__main__":

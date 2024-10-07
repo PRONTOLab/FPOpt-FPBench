@@ -128,50 +128,46 @@ def clean(tmp_dir, logs_dir, prefix):
 def generate_example_cpp(tmp_dir, prefix):
     script = "fpopt-original-driver-generator.py"
     print(f"=== Running {script} ===")
-    run_command(["python3", script, SRC, "example", str(DRIVER_NUM_SAMPLES)], f"Generating example.cpp from {SRC}")
-    generated_cpp = "example.cpp"
-    src_path = generated_cpp
-    dest_path = os.path.join(tmp_dir, f"{prefix}example.cpp")
-    if os.path.exists(src_path):
-        shutil.move(src_path, dest_path)
-        print(f"Moved {generated_cpp} to {dest_path}")
-    else:
-        print(f"Expected generated file {generated_cpp} not found.")
+    src_prefixed = os.path.join(tmp_dir, f"{prefix}{SRC}")
+    dest_prefixed = os.path.join(tmp_dir, f"{prefix}example.cpp")
+    run_command(
+        ["python3", script, src_prefixed, dest_prefixed, "example", str(DRIVER_NUM_SAMPLES)],
+        f"Generating example.cpp from {SRC}",
+    )
+    if not os.path.exists(dest_prefixed):
+        print(f"Failed to generate {dest_prefixed}.")
         sys.exit(1)
+    print(f"Generated {dest_prefixed} successfully.")
 
 
 def generate_example_logged_cpp(tmp_dir, prefix):
     script = "fpopt-logged-driver-generator.py"
     print(f"=== Running {script} ===")
+    src_prefixed = os.path.join(tmp_dir, f"{prefix}{SRC}")
+    dest_prefixed = os.path.join(tmp_dir, f"{prefix}example-logged.cpp")
     run_command(
-        ["python3", script, SRC, "example", str(DRIVER_NUM_SAMPLES)], f"Generating example-logged.cpp from {SRC}"
+        ["python3", script, src_prefixed, dest_prefixed, "example", str(DRIVER_NUM_SAMPLES)],
+        f"Generating example-logged.cpp from {SRC}",
     )
-    generated_cpp = "example-logged.cpp"
-    src_path = generated_cpp
-    dest_path = os.path.join(tmp_dir, f"{prefix}example-logged.cpp")
-    if os.path.exists(src_path):
-        shutil.move(src_path, dest_path)
-        print(f"Moved {generated_cpp} to {dest_path}")
-    else:
-        print(f"Expected generated file {generated_cpp} not found.")
+    if not os.path.exists(dest_prefixed):
+        print(f"Failed to generate {dest_prefixed}.")
         sys.exit(1)
+    print(f"Generated {dest_prefixed} successfully.")
 
 
 def generate_example_baseline_cpp(tmp_dir, prefix):
     script = "fpopt-baseline-generator.py"
     print(f"=== Running {script} ===")
+    src_prefixed = os.path.join(tmp_dir, f"{prefix}{SRC}")
+    dest_prefixed = os.path.join(tmp_dir, f"{prefix}example-baseline.cpp")
     run_command(
-        ["python3", script, SRC, "example", str(DRIVER_NUM_SAMPLES)], f"Generating example-baseline.cpp from {SRC}"
+        ["python3", script, src_prefixed, dest_prefixed, "example", str(DRIVER_NUM_SAMPLES)],
+        f"Generating example-baseline.cpp from {SRC}",
     )
-    generated_cpp = "example-baseline.cpp"
-    src_path = generated_cpp
-    dest_path = os.path.join(tmp_dir, f"{prefix}example-baseline.cpp")
-    if os.path.exists(src_path):
-        shutil.move(src_path, dest_path)
-        print(f"Moved {generated_cpp} to {dest_path}")
-    else:
-        print(f"Expected generated file {generated_cpp} not found.")
+    if not os.path.exists(dest_prefixed):
+        print(f"Failed to generate {dest_prefixed}.")
         sys.exit(1)
+    print(f"Generated {dest_prefixed} successfully.")
 
 
 def compile_example_exe(tmp_dir, prefix):
