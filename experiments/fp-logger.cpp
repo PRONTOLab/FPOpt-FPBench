@@ -1,4 +1,5 @@
 #include <cassert>
+#include <cmath>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
@@ -6,7 +7,6 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
-#include <cmath>
 
 #include "fp-logger.hpp"
 
@@ -17,6 +17,9 @@ public:
   std::vector<double> minOperands;
   std::vector<double> maxOperands;
   unsigned executions = 0;
+
+  double logSum = 0.0;
+  unsigned logCount = 0;
 
   void update(double res, const double *operands, unsigned numOperands) {
     minRes = std::min(minRes, res);
@@ -30,6 +33,19 @@ public:
       maxOperands[i] = std::max(maxOperands[i], operands[i]);
     }
     ++executions;
+
+    if (res != 0.) {
+      logSum += std::log(std::fabs(res));
+      ++logCount;
+    }
+  }
+
+  double getGeometricAverage() const {
+    if (logCount > 0) {
+      return std::exp(logSum / logCount);
+    } else {
+      return 0.0;
+    }
   }
 };
 
@@ -99,6 +115,8 @@ public:
       std::cout << "\tMinRes = " << info.minRes << "\n";
       std::cout << "\tMaxRes = " << info.maxRes << "\n";
       std::cout << "\tExecutions = " << info.executions << "\n";
+      std::cout << "\tGeometric Average = " << info.getGeometricAverage()
+                << "\n";
       for (unsigned i = 0; i < info.minOperands.size(); ++i) {
         std::cout << "\tOperand[" << i << "] = [" << info.minOperands[i] << ", "
                   << info.maxOperands[i] << "]\n";
