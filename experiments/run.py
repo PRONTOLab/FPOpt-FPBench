@@ -271,15 +271,20 @@ def measure_runtime(tmp_dir, prefix, executable, num_runs=NUM_RUNS):
     return average_runtime
 
 
-def plot_results(plots_dir, prefix, budgets, runtimes):
+def plot_results(plots_dir, prefix, budgets, runtimes, example_adjusted_runtime=None):
     plot_filename = os.path.join(plots_dir, f"runtime_plot_{prefix[:-1]}.png")
     print(f"=== Plotting results to {plot_filename} ===")
     plt.figure(figsize=(10, 6))
-    plt.plot(budgets, runtimes, marker="o", linestyle="-")
+    plt.plot(budgets, runtimes, marker="o", linestyle="-", label="FPOPT Adjusted Runtime")
+
+    if example_adjusted_runtime is not None:
+        plt.axhline(y=example_adjusted_runtime, color="r", linestyle="--", label="example.exe Adjusted Runtime")
+
     plt.xlabel("Computation Cost Budget")
     plt.ylabel("Average Runtime (seconds)")
     plt.title("Computation Cost Budget vs. Denoised Average Runtime")
     plt.grid(True)
+    plt.legend()
     plt.savefig(plot_filename)
     plt.close()
     print(f"Plot saved to {plot_filename}")
@@ -307,7 +312,6 @@ def measure_baseline_runtime(tmp_dir, prefix, num_runs=NUM_RUNS):
     executable = f"example-baseline.exe"
     exe_path = os.path.join(tmp_dir, executable)
     avg_runtime = measure_runtime(tmp_dir, prefix, executable, num_runs)
-    print(f"Baseline average runtime: {avg_runtime:.4f} seconds")
     return avg_runtime
 
 
@@ -316,6 +320,10 @@ def benchmark(tmp_dir, logs_dir, prefix, plots_dir):
 
     baseline_runtime = measure_baseline_runtime(tmp_dir, prefix, NUM_RUNS)
     print(f"Baseline average runtime: {baseline_runtime:.4f} seconds")
+
+    print("\n=== Measuring adjusted runtime for example.exe ===")
+    avg_runtime_example = measure_runtime(tmp_dir, prefix, "example.exe", NUM_RUNS)
+    adjusted_runtime_example = avg_runtime_example - baseline_runtime
 
     budgets = []
     runtimes = []
@@ -342,7 +350,7 @@ def benchmark(tmp_dir, logs_dir, prefix, plots_dir):
         budgets.append(cost)
         runtimes.append(adjusted_runtime)
 
-    plot_results(plots_dir, prefix, budgets, runtimes)
+    plot_results(plots_dir, prefix, budgets, runtimes, example_adjusted_runtime=adjusted_runtime_example)
 
 
 def build_with_benchmark(tmp_dir, logs_dir, plots_dir, prefix):
