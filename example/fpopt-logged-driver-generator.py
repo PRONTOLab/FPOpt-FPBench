@@ -4,7 +4,7 @@ import re
 import random
 import numpy as np
 
-DEFAULT_NUM_SAMPLES = 10000
+DEFAULT_NUM_SAMPLES = 100000
 default_regex = "ex\\d+"
 
 np.random.seed(42)

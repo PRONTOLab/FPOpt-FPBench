@@ -25,7 +25,7 @@ FPOPTFLAGS += -mllvm --enzyme-enable-fpopt \
 
 SRC ?= example.c
 LOGGER ?= fp-logger.cpp
-EXE ?= example.exe example-logged.exe example-fpopt.exe
+EXE ?= example.exe example-logged.exe example-golden.exe example-fpopt.exe
 
 .PHONY: all clean
 
@@ -34,11 +34,17 @@ all: $(EXE)
 example.cpp: $(SRC)
 	python3 fpopt-original-driver-generator.py $(SRC) example
 
+example-golden.cpp: $(SRC)
+	python3 fpopt-golden-driver-generator.py $(SRC) 128 example
+
 example-logged.cpp: $(SRC)
 	python3 fpopt-logged-driver-generator.py $(SRC) example
 
 example.exe: example.cpp
 	$(CXX) -Wall -O3 example.cpp $(CXXFLAGS) -o $@
+
+example-golden.exe: example-golden.cpp
+	$(CXX) -Wall -O3 example-golden.cpp $(CXXFLAGS) -lmpfr -o $@
 
 example-logged.exe: example-logged.cpp $(LOGGER)
 	$(CXX) -Wall -O3 $(LOGGER) example-logged.cpp $(CXXFLAGS) -o $@
@@ -50,5 +56,5 @@ example-fpopt.exe: example.cpp example.txt
 	$(CXX) example.cpp $(CXXFLAGS) $(FPOPTFLAGS) -o $@
 
 clean:
-	rm -f $(EXE) example-logged.cpp example.cpp
+	rm -f $(EXE) example-logged.cpp example.cpp example-golden.cpp example.txt
 
