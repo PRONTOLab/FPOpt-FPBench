@@ -1,13 +1,9 @@
 import os
 import sys
 import re
-import random
-import numpy as np
 
 DEFAULT_NUM_SAMPLES = 100000
 default_regex = "ex\\d+"
-
-np.random.seed(42)
 
 
 def parse_bound(bound):
@@ -23,14 +19,15 @@ def parse_c_file(filepath, func_regex):
 
     pattern = re.compile(rf"(?s)(// ## PRE(?:.*?\n)+?)\s*([\w\s\*]+?)\s+({func_regex})\s*\(([^)]*)\)")
 
-    matches = pattern.findall(content)
+    matches = list(pattern.finditer(content))
 
     if not matches:
         exit(f"No functions found with the regex: {func_regex}")
 
     functions = []
 
-    for comments, return_type, func_name, params in matches:
+    for match in matches:
+        comments, return_type, func_name, params = match.groups()
         param_comments = re.findall(r"// ## PRE (\w+):\s*([-+.\d/]+),\s*([-+.\d/]+)", comments)
         bounds = {
             name: {
@@ -42,11 +39,13 @@ def parse_c_file(filepath, func_regex):
         params = [param.strip() for param in params.split(",") if param.strip()]
         functions.append((func_name, bounds, params, return_type.strip()))
 
-    return functions
+    return functions, content, matches
 
 
 def create_driver_function(functions, num_samples_per_func):
     driver_code = [
+        "#undef double",
+        "",
         "#include <iostream>",
         "#include <random>",
         "#include <cstring>",
@@ -78,6 +77,7 @@ def create_driver_function(functions, num_samples_per_func):
     driver_code.append("")
     driver_code.append("    std::mt19937 gen(42);")
     driver_code.append("")
+
     driver_code.append("    std::ofstream ofs;")
     driver_code.append("    if (save_outputs) {")
     driver_code.append("        ofs.open(output_path);")
@@ -154,26 +154,37 @@ def create_driver_function(functions, num_samples_per_func):
 
 
 def main():
-    if len(sys.argv) < 2:
-        exit("Usage: script.py <filepath> [function_regex] [num_samples_per_func (default: 100000)]")
+    if len(sys.argv) < 3:
+        exit("Usage: script.py <filepath> <PREC> [function_regex] [num_samples_per_func (default: 100000)]")
 
     filepath = sys.argv[1]
-    func_regex = sys.argv[2] if len(sys.argv) > 2 else default_regex
-    num_samples_per_func = int(sys.argv[3]) if len(sys.argv) > 3 else DEFAULT_NUM_SAMPLES
+    PREC = sys.argv[2]
 
-    if len(sys.argv) <= 2:
+    func_regex = sys.argv[3] if len(sys.argv) > 3 else default_regex
+    num_samples_per_func = int(sys.argv[4]) if len(sys.argv) > 4 else DEFAULT_NUM_SAMPLES
+
+    if len(sys.argv) <= 3:
         print(f"WARNING: No regex provided for target function names. Using default regex: {default_regex}")
 
-    functions = parse_c_file(filepath, func_regex)
+    functions, original_content, matches = parse_c_file(filepath, func_regex)
 
     driver_code = create_driver_function(functions, num_samples_per_func)
-    new_filepath = os.path.splitext(filepath)[0] + ".cpp"
+    new_filepath = os.path.splitext(filepath)[0] + "-golden.cpp"
 
     with open(filepath, "r") as original_file:
         original_content = original_file.read()
 
+    mpfr_header = f'#include "mpfrcpp.hpp"\nconst unsigned int PREC = {PREC};\n#define double mpfrcpp<PREC>\n\n'
+
+    if matches:
+        first_match = matches[0]
+        insert_pos = first_match.start()
+        modified_content = original_content[:insert_pos] + mpfr_header + original_content[insert_pos:]
+    else:
+        exit("No matching functions found to insert mpfr header.")
+
     with open(new_filepath, "w") as new_file:
-        new_file.write(original_content)
+        new_file.write(modified_content)
         new_file.write("\n\n" + driver_code)
 
     print(f"Driver program written to: {new_filepath}")
