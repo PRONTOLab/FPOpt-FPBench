@@ -2,6 +2,7 @@ import os
 import re
 import subprocess
 import glob
+import multiprocessing
 
 
 def extract_functions_from_c_file(content, func_regex="ex\\d+"):
@@ -52,6 +53,35 @@ def extract_functions_from_c_file(content, func_regex="ex\\d+"):
     return functions
 
 
+def process_function_task(task):
+    func, base_name = task
+    func_name = func["func_name"]
+    return_type = func["return_type"]
+    params = func["params"]
+    comments = func["comments"]
+    print(f"Processing function: {func_name}")
+
+    prefix = f"{base_name}-{func_name}-"
+
+    example_c_filename = f"{prefix}example.c"
+    example_c_filepath = os.path.join("tmp", example_c_filename)
+
+    func_body_lines = func["func_body"].split("\n")
+
+    func_signature_line = f"__attribute__((noinline))\n{return_type} example({params}) {{"
+
+    func_body_lines[0] = func_signature_line
+    func_code = comments + "\n" + "\n".join(func_body_lines)
+    includes = "#include <math.h>\n#include <stdint.h>\n#define TRUE 1\n#define FALSE 0\n"
+    example_c_content = includes + "\n" + func_code
+    with open(example_c_filepath, "w") as f:
+        f.write(example_c_content)
+    try:
+        subprocess.check_call(["python3", "run.py", "--prefix", prefix])
+    except subprocess.CalledProcessError as e:
+        print(f"Error running run.py for function {func_name} in base {base_name}")
+
+
 def main():
     benchmark_dir = "../benchmarks"
     racket_script = "../export.rkt"
@@ -62,6 +92,8 @@ def main():
         return
 
     os.makedirs("tmp", exist_ok=True)
+
+    tasks = []
 
     for fpcore_file in fpcore_files:
         filename = os.path.basename(fpcore_file)
@@ -90,32 +122,15 @@ def main():
             continue
         for func in functions:
             func_name = func["func_name"]
-            return_type = func["return_type"]
-            params = func["params"]
-            comments = func["comments"]
+            print(f"Found function: {func_name}")
+            task = (func, base_name)
+            tasks.append(task)
 
-            print(f"Processing function: {func_name}")
-
-            prefix = f"{base_name}-{func_name}-"
-
-            example_c_filename = f"{prefix}example.c"
-            example_c_filepath = os.path.join("tmp", example_c_filename)
-
-            func_body_lines = func["func_body"].split("\n")
-
-            func_signature_line = f"__attribute__((noinline))\n{return_type} example({params}) {{"
-
-            func_body_lines[0] = func_signature_line
-            func_code = comments + "\n" + "\n".join(func_body_lines)
-            includes = "#include <math.h>\n#include <stdint.h>\n#define TRUE 1\n#define FALSE 0\n"
-            example_c_content = includes + "\n" + func_code
-            with open(example_c_filepath, "w") as f:
-                f.write(example_c_content)
-            try:
-                subprocess.check_call(["python3", "run.py", "--prefix", prefix])
-            except subprocess.CalledProcessError as e:
-                print(f"Error running run.py for function {func_name} in file {c_filename}")
-                continue
+    if tasks:
+        with multiprocessing.Pool(8) as pool:
+            pool.map(process_function_task, tasks)
+    else:
+        print("No functions to process.")
 
     print("Processing completed.")
 
