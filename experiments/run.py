@@ -8,6 +8,7 @@ import time
 import re
 import argparse
 import matplotlib.pyplot as plt
+import math
 from statistics import mean
 
 ENZYME_PATH = "/home/brant/sync/Enzyme/build/Enzyme/ClangEnzyme-15.so"
@@ -86,43 +87,13 @@ def run_command(command, description, capture_output=False, output_file=None, ve
         sys.exit(e.returncode)
 
 
-def clean(tmp_dir, logs_dir, prefix):
+def clean(tmp_dir, logs_dir, plots_dir):
     print("=== Cleaning up generated files ===")
-    exe_files = [
-        os.path.join(tmp_dir, f"{prefix}example.exe"),
-        os.path.join(tmp_dir, f"{prefix}example-logged.exe"),
-        os.path.join(tmp_dir, f"{prefix}example-baseline.exe"),
-        os.path.join(tmp_dir, f"{prefix}example-fpopt.exe"),
-    ]
-    cpp_files = [
-        os.path.join(tmp_dir, f"{prefix}example.cpp"),
-        os.path.join(tmp_dir, f"{prefix}example-logged.cpp"),
-        os.path.join(tmp_dir, f"{prefix}example-baseline.cpp"),
-    ]
-    log_files = [
-        os.path.join(logs_dir, f"{prefix}compile_fpopt.log"),
-    ]
-    output_txt = os.path.join(tmp_dir, f"{prefix}example.txt")
-    runtime_plot = os.path.join("plots", f"runtime_plot_{prefix[:-1]}.png")
-
-    for exe in exe_files:
-        if os.path.exists(exe):
-            os.remove(exe)
-            print(f"Removed {exe}")
-    for cpp in cpp_files:
-        if os.path.exists(cpp):
-            os.remove(cpp)
-            print(f"Removed {cpp}")
-    for log in log_files:
-        if os.path.exists(log):
-            os.remove(log)
-            print(f"Removed {log}")
-    if os.path.exists(output_txt):
-        os.remove(output_txt)
-        print(f"Removed {output_txt}")
-    if os.path.exists(runtime_plot):
-        os.remove(runtime_plot)
-        print(f"Removed {runtime_plot}")
+    directories = [tmp_dir, logs_dir, plots_dir]
+    for directory in directories:
+        if os.path.exists(directory):
+            shutil.rmtree(directory)
+            print(f"Removed directory: {directory}")
 
 
 def generate_example_cpp(tmp_dir, prefix):
@@ -272,20 +243,133 @@ def measure_runtime(tmp_dir, prefix, executable, num_runs=NUM_RUNS):
     return average_runtime
 
 
-def plot_results(plots_dir, prefix, budgets, runtimes, example_adjusted_runtime=None):
-    plot_filename = os.path.join(plots_dir, f"runtime_plot_{prefix[:-1]}.png")
+def get_values_file_path(tmp_dir, prefix, binary_name):
+    return os.path.join(tmp_dir, f"{prefix}{binary_name}-values.txt")
+
+
+def generate_example_values(tmp_dir, prefix):
+    binary_name = "example.exe"
+    exe = os.path.join(tmp_dir, f"{prefix}{binary_name}")
+    output_values_file = get_values_file_path(tmp_dir, prefix, binary_name)
+    cmd = [exe, "--output-path", output_values_file]
+    run_command(cmd, f"Generating function values from {binary_name}", verbose=False)
+
+
+def generate_values(tmp_dir, prefix, binary_name):
+    exe = os.path.join(tmp_dir, f"{prefix}{binary_name}")
+    values_file = get_values_file_path(tmp_dir, prefix, binary_name)
+    cmd = [exe, "--output-path", values_file]
+    run_command(cmd, f"Generating function values from {binary_name}", verbose=False)
+
+
+def compile_golden_exe(tmp_dir, prefix):
+    source = os.path.join(tmp_dir, f"{prefix}golden.cpp")
+    output = os.path.join(tmp_dir, f"{prefix}golden.exe")
+    cmd = [CXX, source] + CXXFLAGS + ["-o", output]
+    run_command(cmd, f"Compiling {output}")
+
+
+def generate_golden_values(tmp_dir, prefix):
+    script = "fpopt-golden-driver-generator.py"
+    src_prefixed = os.path.join(tmp_dir, f"{prefix}{SRC}")
+    dest_prefixed = os.path.join(tmp_dir, f"{prefix}golden.cpp")
+    cur_prec = 128
+    max_prec = 4096
+    PREC_step = 128
+    prev_output = None
+    output_values_file = get_values_file_path(tmp_dir, prefix, "golden.exe")
+    while cur_prec <= max_prec:
+        run_command(
+            ["python3", script, src_prefixed, dest_prefixed, str(cur_prec), "example", str(DRIVER_NUM_SAMPLES)],
+            f"Generating golden.cpp with PREC={cur_prec}",
+        )
+        if not os.path.exists(dest_prefixed):
+            print(f"Failed to generate {dest_prefixed}.")
+            sys.exit(1)
+        print(f"Generated {dest_prefixed} successfully.")
+
+        compile_golden_exe(tmp_dir, prefix)
+
+        exe = os.path.join(tmp_dir, f"{prefix}golden.exe")
+        cmd = [exe, "--output-path", output_values_file]
+        run_command(cmd, f"Generating golden values with PREC={cur_prec}", verbose=False)
+
+        with open(output_values_file, "r") as f:
+            output = f.read()
+
+        if output == prev_output:
+            print(f"Golden values converged at PREC={cur_prec}")
+            break
+        else:
+            prev_output = output
+            cur_prec += PREC_step
+    else:
+        print(f"Failed to converge golden values up to PREC={max_prec}")
+        sys.exit(1)
+
+
+def calculate_average_accuracy(tmp_dir, prefix, golden_values_file, binaries):
+    with open(golden_values_file, "r") as f:
+        golden_values = [float(line.strip()) for line in f]
+
+    accuracies = {}
+    for binary in binaries:
+        values_file = get_values_file_path(tmp_dir, prefix, binary)
+        if not os.path.exists(values_file):
+            print(f"Values file {values_file} does not exist. Generating it now.")
+            generate_values(tmp_dir, prefix, binary)
+        with open(values_file, "r") as f:
+            values = [float(line.strip()) for line in f]
+        if len(values) != len(golden_values):
+            print(f"Number of values in {values_file} does not match golden values")
+            sys.exit(1)
+
+        valid_errors = []
+        for v, g in zip(values, golden_values):
+            if math.isnan(v) or math.isnan(g):
+                continue
+            if g == 0:
+                continue
+            error = abs((v - g) / g)
+            valid_errors.append(error)
+
+        if not valid_errors:
+            print(f"No valid data to compute accuracy for binary {binary}. Setting accuracy to None.")
+            accuracies[binary] = None
+            continue
+
+        avg_accuracy = sum(valid_errors) / len(valid_errors)
+        accuracies[binary] = avg_accuracy
+    return accuracies
+
+
+def plot_results(
+    plots_dir, prefix, budgets, runtimes, errors, example_adjusted_runtime=None, example_accuracy=None
+):
+    plot_filename = os.path.join(plots_dir, f"runtime_error_plot_{prefix[:-1]}.png")
     print(f"=== Plotting results to {plot_filename} ===")
-    plt.figure(figsize=(10, 6))
-    plt.plot(budgets, runtimes, marker="o", linestyle="-", label="FPOPT Adjusted Runtime")
+    fig, ax1 = plt.subplots(figsize=(10, 6))
 
+    color = "tab:blue"
+    ax1.set_xlabel("Computation Cost Budget")
+    ax1.set_ylabel("Runtimes (seconds)", color=color)
+    ax1.plot(budgets, runtimes, marker="o", linestyle="-", label="Optimized Runtimes", color=color)
     if example_adjusted_runtime is not None:
-        plt.axhline(y=example_adjusted_runtime, color="r", linestyle="--", label="example.exe Adjusted Runtime")
+        ax1.axhline(y=example_adjusted_runtime, color="r", linestyle="--", label="Original Runtimes")
+    ax1.tick_params(axis="y", labelcolor=color)
 
-    plt.xlabel("Computation Cost Budget")
-    plt.ylabel("Average Runtime (seconds)")
-    plt.title("Computation Cost Budget vs. Denoised Average Runtime")
+    ax2 = ax1.twinx()
+    color = "tab:green"
+    ax2.set_ylabel("Relative Errors", color=color)
+    ax2.plot(budgets, errors, marker="s", linestyle="--", label="Optimized Reletive Errors", color=color)
+    if example_accuracy is not None:
+        ax2.axhline(y=example_accuracy, color="purple", linestyle=":", label="Original Relative Errors")
+    ax2.tick_params(axis="y", labelcolor=color)
+
+    plt.title("Computation Cost Budget vs Runtime and Relative Error")
+    fig.tight_layout()
+    fig.legend(loc="upper right")
     plt.grid(True)
-    plt.legend()
     plt.savefig(plot_filename)
     plt.close()
     print(f"Plot saved to {plot_filename}")
@@ -311,7 +395,6 @@ def build_all(tmp_dir, logs_dir, prefix):
 
 def measure_baseline_runtime(tmp_dir, prefix, num_runs=NUM_RUNS):
     executable = f"example-baseline.exe"
-    exe_path = os.path.join(tmp_dir, executable)
     avg_runtime = measure_runtime(tmp_dir, prefix, executable, num_runs)
     return avg_runtime
 
@@ -326,8 +409,23 @@ def benchmark(tmp_dir, logs_dir, prefix, plots_dir):
     avg_runtime_example = measure_runtime(tmp_dir, prefix, "example.exe", NUM_RUNS)
     adjusted_runtime_example = avg_runtime_example - baseline_runtime
 
+    print("\n=== Generating function values for example.exe ===")
+    generate_example_values(tmp_dir, prefix)
+
+    print("\n=== Generating golden values ===")
+    generate_golden_values(tmp_dir, prefix)
+
+    golden_values_file = get_values_file_path(tmp_dir, prefix, "golden.exe")
+    example_binary = "example.exe"
+    accuracies_example = calculate_average_accuracy(tmp_dir, prefix, golden_values_file, [example_binary])
+    example_accuracy = accuracies_example[example_binary]
+    print(f"Average accuracy for example.exe: {example_accuracy}")
+
     budgets = []
     runtimes = []
+    accuracies = []
+
+    optimized_binaries = []
 
     for cost in costs:
         print(f"\n=== Processing computation cost budget: {cost} ===")
@@ -351,7 +449,23 @@ def benchmark(tmp_dir, logs_dir, prefix, plots_dir):
         budgets.append(cost)
         runtimes.append(adjusted_runtime)
 
-    plot_results(plots_dir, prefix, budgets, runtimes, example_adjusted_runtime=adjusted_runtime_example)
+        generate_values(tmp_dir, prefix, output_binary)
+        optimized_binaries.append(output_binary)
+
+    accuracies_dict = calculate_average_accuracy(tmp_dir, prefix, golden_values_file, optimized_binaries)
+    for binary in optimized_binaries:
+        accuracies.append(accuracies_dict[binary])
+        print(f"Average rel error for {binary}: {accuracies_dict[binary]}")
+
+    plot_results(
+        plots_dir,
+        prefix,
+        budgets,
+        runtimes,
+        accuracies,
+        example_adjusted_runtime=adjusted_runtime_example,
+        example_accuracy=example_accuracy,
+    )
 
 
 def build_with_benchmark(tmp_dir, logs_dir, plots_dir, prefix):
@@ -381,7 +495,7 @@ def main():
     os.makedirs(plots_dir, exist_ok=True)
 
     if args.clean:
-        clean(tmp_dir, logs_dir, prefix)
+        clean(tmp_dir, logs_dir, plots_dir)
         sys.exit(0)
     elif args.build:
         build_all(tmp_dir, logs_dir, prefix)
