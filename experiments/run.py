@@ -12,6 +12,8 @@ import math
 import numpy as np
 from statistics import mean
 
+from tqdm import tqdm, trange
+
 ENZYME_PATH = "/home/brant/sync/Enzyme/build/Enzyme/ClangEnzyme-15.so"
 LLVM_PATH = "/home/brant/llvms/llvm15/build/bin"
 CXX = os.path.join(LLVM_PATH, "clang++")
@@ -61,7 +63,7 @@ FPOPTFLAGS_BASE = [
 SRC = "example.c"
 LOGGER = "fp-logger.cpp"
 EXE = ["example.exe", "example-logged.exe", "example-fpopt.exe"]
-NUM_RUNS = 10
+NUM_RUNS = 100
 DRIVER_NUM_SAMPLES = 10000000
 
 
@@ -225,7 +227,7 @@ def measure_runtime(tmp_dir, prefix, executable, num_runs=NUM_RUNS):
     print(f"=== Measuring runtime for {executable} ===")
     runtimes = []
     exe_path = os.path.join(tmp_dir, f"{prefix}{executable}")
-    for i in range(1, num_runs + 1):
+    for i in trange(1, num_runs + 1):
         try:
             result = subprocess.run([exe_path], capture_output=True, text=True, check=True)
             output = result.stdout
@@ -233,7 +235,6 @@ def measure_runtime(tmp_dir, prefix, executable, num_runs=NUM_RUNS):
             if match:
                 runtime = float(match.group(1))
                 runtimes.append(runtime)
-                print(f"Run {i}: {runtime:.6f} seconds")
             else:
                 print(f"Could not parse runtime from output on run {i}")
                 sys.exit(1)
@@ -340,8 +341,19 @@ def get_avg_rel_error(tmp_dir, prefix, golden_values_file, binaries):
             errors[binary] = None
             continue
 
-        avg_rel_err = sum(valid_errors) / len(valid_errors)
-        errors[binary] = avg_rel_err
+        try:
+            product = math.prod(1 + e for e in valid_errors)
+            geo_mean = product ** (1 / len(valid_errors)) - 1
+            errors[binary] = geo_mean
+        except OverflowError:
+            print(
+                f"Overflow error encountered while computing geometric mean for binary {binary}. Setting rel error to None."
+            )
+            errors[binary] = None
+        except ZeroDivisionError:
+            print(f"No valid errors to compute geometric mean for binary {binary}. Setting rel error to None.")
+            errors[binary] = None
+
     return errors
 
 
@@ -460,14 +472,11 @@ def benchmark(tmp_dir, logs_dir, prefix, plots_dir):
     baseline_runtime = measure_baseline_runtime(tmp_dir, prefix, NUM_RUNS)
     print(f"Baseline average runtime: {baseline_runtime:.6f} seconds")
 
-    print("\n=== Measuring adjusted runtime for example.exe ===")
     avg_runtime_example = measure_runtime(tmp_dir, prefix, "example.exe", NUM_RUNS)
     adjusted_runtime_example = avg_runtime_example - baseline_runtime
 
-    print("\n=== Generating function values for example.exe ===")
     generate_example_values(tmp_dir, prefix)
 
-    print("\n=== Generating golden values ===")
     generate_golden_values(tmp_dir, prefix)
 
     golden_values_file = get_values_file_path(tmp_dir, prefix, "golden.exe")
