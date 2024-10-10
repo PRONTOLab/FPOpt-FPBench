@@ -9,6 +9,7 @@ import re
 import argparse
 import matplotlib.pyplot as plt
 import math
+import numpy as np
 from statistics import mean
 
 ENZYME_PATH = "/home/brant/sync/Enzyme/build/Enzyme/ClangEnzyme-15.so"
@@ -308,11 +309,11 @@ def generate_golden_values(tmp_dir, prefix):
         sys.exit(1)
 
 
-def calculate_average_accuracy(tmp_dir, prefix, golden_values_file, binaries):
+def get_avg_rel_error(tmp_dir, prefix, golden_values_file, binaries):
     with open(golden_values_file, "r") as f:
         golden_values = [float(line.strip()) for line in f]
 
-    accuracies = {}
+    errors = {}
     for binary in binaries:
         values_file = get_values_file_path(tmp_dir, prefix, binary)
         if not os.path.exists(values_file):
@@ -334,43 +335,96 @@ def calculate_average_accuracy(tmp_dir, prefix, golden_values_file, binaries):
             valid_errors.append(error)
 
         if not valid_errors:
-            print(f"No valid data to compute accuracy for binary {binary}. Setting accuracy to None.")
-            accuracies[binary] = None
+            print(f"No valid data to compute rel error for binary {binary}. Setting rel error to None.")
+            errors[binary] = None
             continue
 
-        avg_accuracy = sum(valid_errors) / len(valid_errors)
-        accuracies[binary] = avg_accuracy
-    return accuracies
+        avg_rel_err = sum(valid_errors) / len(valid_errors)
+        errors[binary] = avg_rel_err
+    return errors
 
 
-def plot_results(
-    plots_dir, prefix, budgets, runtimes, errors, example_adjusted_runtime=None, example_accuracy=None
-):
+def plot_results(plots_dir, prefix, budgets, runtimes, errors, example_adjusted_runtime=None, example_rel_err=None):
     plot_filename = os.path.join(plots_dir, f"runtime_error_plot_{prefix[:-1]}.png")
     print(f"=== Plotting results to {plot_filename} ===")
-    fig, ax1 = plt.subplots(figsize=(10, 6))
 
-    color = "tab:blue"
+    fig, (ax1, ax3) = plt.subplots(1, 2, figsize=(20, 6))
+
+    # First Plot: Computation Cost Budget vs Runtime and Relative Error
+    color_runtime = "tab:blue"
     ax1.set_xlabel("Computation Cost Budget")
-    ax1.set_ylabel("Runtimes (seconds)", color=color)
-    ax1.plot(budgets, runtimes, marker="o", linestyle="-", label="Optimized Runtimes", color=color)
+    ax1.set_ylabel("Runtimes (seconds)", color=color_runtime)
+    (line1,) = ax1.plot(budgets, runtimes, marker="o", linestyle="-", label="Optimized Runtimes", color=color_runtime)
     if example_adjusted_runtime is not None:
-        ax1.axhline(y=example_adjusted_runtime, color="r", linestyle="--", label="Original Runtimes")
-    ax1.tick_params(axis="y", labelcolor=color)
+        line2 = ax1.axhline(y=example_adjusted_runtime, color=color_runtime, linestyle=":", label="Original Runtime")
+    ax1.tick_params(axis="y", labelcolor=color_runtime)
 
     ax2 = ax1.twinx()
-    color = "tab:green"
-    ax2.set_ylabel("Relative Errors", color=color)
-    ax2.plot(budgets, errors, marker="s", linestyle="--", label="Optimized Reletive Errors", color=color)
-    if example_accuracy is not None:
-        ax2.axhline(y=example_accuracy, color="purple", linestyle=":", label="Original Relative Errors")
-    ax2.tick_params(axis="y", labelcolor=color)
+    color_error = "tab:green"
+    ax2.set_ylabel("Relative Errors", color=color_error)
+    (line3,) = ax2.plot(
+        budgets, errors, marker="s", linestyle="-", label="Optimized Relative Errors", color=color_error
+    )
+    if example_rel_err is not None:
+        line4 = ax2.axhline(y=example_rel_err, color=color_error, linestyle=":", label="Original Relative Error")
+    ax2.tick_params(axis="y", labelcolor=color_error)
 
-    plt.title("Computation Cost Budget vs Runtime and Relative Error")
-    fig.tight_layout()
-    fig.legend(loc="upper right")
-    plt.grid(True)
-    plt.savefig(plot_filename)
+    ax1.set_title("Computation Cost Budget vs Runtime and Relative Error")
+    ax1.grid(True)
+
+    lines = [line1, line3]
+    labels = [line.get_label() for line in lines]
+    if example_adjusted_runtime is not None:
+        lines.append(line2)
+        labels.append(line2.get_label())
+    if example_rel_err is not None:
+        lines.append(line4)
+        labels.append(line4.get_label())
+
+    ax1.legend(lines, labels, loc="upper left", bbox_to_anchor=(1.05, 1), borderaxespad=0.0)
+
+    # Second Plot: Pareto Front of Optimized Programs
+    ax3.set_xlabel("Runtimes (seconds)")
+    ax3.set_ylabel("Relative Errors")
+    ax3.set_title("Pareto Front of Optimized Programs")
+
+    scatter1 = ax3.scatter(runtimes, errors, label="Optimized Programs", color="blue")
+
+    if example_adjusted_runtime is not None and example_rel_err is not None:
+        scatter2 = ax3.scatter(
+            example_adjusted_runtime, example_rel_err, marker="x", color="red", s=100, label="Original Program"
+        )
+
+    # Calculate Pareto Front
+    points = np.array(list(zip(runtimes, errors)))
+    sorted_indices = np.argsort(points[:, 0])
+    sorted_points = points[sorted_indices]
+
+    pareto_front = [sorted_points[0]]
+    for point in sorted_points[1:]:
+        if point[1] <= pareto_front[-1][1]:
+            pareto_front.append(point)
+
+    pareto_front = np.array(pareto_front)
+
+    (line_pareto,) = ax3.plot(
+        pareto_front[:, 0], pareto_front[:, 1], linestyle="-", color="purple", label="Pareto Front"
+    )
+
+    ax3.grid(True)
+
+    pareto_lines = [scatter1, line_pareto]
+    pareto_labels = [scatter1.get_label(), line_pareto.get_label()]
+    if example_adjusted_runtime is not None and example_rel_err is not None:
+        pareto_lines.append(scatter2)
+        pareto_labels.append(scatter2.get_label())
+
+    ax3.legend(pareto_lines, pareto_labels, loc="upper left", bbox_to_anchor=(1.05, 1), borderaxespad=0.0)
+
+    plt.tight_layout()
+    plt.subplots_adjust(right=0.75)
+
+    plt.savefig(plot_filename, bbox_inches="tight")
     plt.close()
     print(f"Plot saved to {plot_filename}")
 
@@ -417,13 +471,13 @@ def benchmark(tmp_dir, logs_dir, prefix, plots_dir):
 
     golden_values_file = get_values_file_path(tmp_dir, prefix, "golden.exe")
     example_binary = "example.exe"
-    accuracies_example = calculate_average_accuracy(tmp_dir, prefix, golden_values_file, [example_binary])
-    example_accuracy = accuracies_example[example_binary]
-    print(f"Average accuracy for example.exe: {example_accuracy}")
+    rel_errs_example = get_avg_rel_error(tmp_dir, prefix, golden_values_file, [example_binary])
+    rel_err_example = rel_errs_example[example_binary]
+    print(f"Average Rel Error for example.exe: {rel_err_example}")
 
     budgets = []
     runtimes = []
-    accuracies = []
+    errors = []
 
     optimized_binaries = []
 
@@ -452,19 +506,19 @@ def benchmark(tmp_dir, logs_dir, prefix, plots_dir):
         generate_values(tmp_dir, prefix, output_binary)
         optimized_binaries.append(output_binary)
 
-    accuracies_dict = calculate_average_accuracy(tmp_dir, prefix, golden_values_file, optimized_binaries)
+    errors_dict = get_avg_rel_error(tmp_dir, prefix, golden_values_file, optimized_binaries)
     for binary in optimized_binaries:
-        accuracies.append(accuracies_dict[binary])
-        print(f"Average rel error for {binary}: {accuracies_dict[binary]}")
+        errors.append(errors_dict[binary])
+        print(f"Average rel error for {binary}: {errors_dict[binary]}")
 
     plot_results(
         plots_dir,
         prefix,
         budgets,
         runtimes,
-        accuracies,
+        errors,
         example_adjusted_runtime=adjusted_runtime_example,
-        example_accuracy=example_accuracy,
+        example_rel_err=rel_err_example,
     )
 
 
