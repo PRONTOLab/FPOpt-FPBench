@@ -342,8 +342,8 @@ def get_avg_rel_error(tmp_dir, prefix, golden_values_file, binaries):
             continue
 
         try:
-            product = math.prod(1 + e for e in valid_errors)
-            geo_mean = product ** (1 / len(valid_errors)) - 1
+            log_sum = sum(math.log1p(e) for e in valid_errors)
+            geo_mean = math.expm1(log_sum / len(valid_errors))
             errors[binary] = geo_mean
         except OverflowError:
             print(
@@ -382,7 +382,7 @@ def plot_results(plots_dir, prefix, budgets, runtimes, errors, example_adjusted_
         line4 = ax2.axhline(y=example_rel_err, color=color_error, linestyle=":", label="Original Relative Error")
     ax2.tick_params(axis="y", labelcolor=color_error)
 
-    ax1.set_title("Computation Cost Budget vs Runtime and Relative Error")
+    ax1.set_title(f"Computation Cost Budget vs Runtime and Relative Error ({prefix[:-1]})")
     ax1.grid(True)
 
     lines = [line1, line3]
@@ -399,7 +399,7 @@ def plot_results(plots_dir, prefix, budgets, runtimes, errors, example_adjusted_
     # Second Plot: Pareto Front of Optimized Programs
     ax3.set_xlabel("Runtimes (seconds)")
     ax3.set_ylabel("Relative Errors")
-    ax3.set_title("Pareto Front of Optimized Programs")
+    ax3.set_title(f"Pareto Front of Optimized {prefix[:-1]} Binaries")
 
     scatter1 = ax3.scatter(runtimes, errors, label="Optimized Programs", color="blue")
 
