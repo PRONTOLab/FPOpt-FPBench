@@ -5,7 +5,7 @@ import random
 import numpy as np
 
 DEFAULT_NUM_SAMPLES = 100000
-default_regex = "ex\\d+"
+DEFAULT_REGEX = "ex\\d+"
 
 np.random.seed(42)
 
@@ -106,6 +106,9 @@ def create_driver_function(functions, num_samples_per_func):
             driver_code.append(f"    std::uniform_real_distribution<double> {dist_name}({min_val}, {max_val});")
     driver_code.append("")
 
+    driver_code.append("    double sum = 0.;")
+    driver_code.append("")
+
     driver_code.append("    auto start_time = std::chrono::high_resolution_clock::now();")
     driver_code.append("")
 
@@ -127,17 +130,19 @@ def create_driver_function(functions, num_samples_per_func):
 
         call_params_str = ", ".join(call_params)
 
-        driver_code.append(f"        double result = {func_name}({call_params_str});")
+        driver_code.append(f"        double res = {func_name}({call_params_str});")
+        driver_code.append("        sum += res;")
 
         driver_code.append("        if (save_outputs) {")
         driver_code.append(
-            '            ofs << std::setprecision(std::numeric_limits<double>::digits10 + 1) << result << "\\n";'
+            '            ofs << std::setprecision(std::numeric_limits<double>::digits10 + 1) << res << "\\n";'
         )
         driver_code.append("        }")
 
         driver_code.append("    }")
         driver_code.append("")
 
+    driver_code.append('    std::cout << "Sum: " << sum << std::endl;')
     driver_code.append("    auto end_time = std::chrono::high_resolution_clock::now();")
     driver_code.append("    std::chrono::duration<double> elapsed = end_time - start_time;")
     driver_code.append('    std::cout << "Total runtime: " << elapsed.count() << " seconds\\n";')
@@ -155,14 +160,14 @@ def create_driver_function(functions, num_samples_per_func):
 
 def main():
     if len(sys.argv) < 2:
-        exit("Usage: script.py <filepath> [function_regex] [num_samples_per_func (default: 100000)]")
+        exit(f"Usage: script.py <filepath> [function_regex] [num_samples_per_func (default: {DEFAULT_NUM_SAMPLES})]")
 
     filepath = sys.argv[1]
-    func_regex = sys.argv[2] if len(sys.argv) > 2 else default_regex
+    func_regex = sys.argv[2] if len(sys.argv) > 2 else DEFAULT_REGEX
     num_samples_per_func = int(sys.argv[3]) if len(sys.argv) > 3 else DEFAULT_NUM_SAMPLES
 
     if len(sys.argv) <= 2:
-        print(f"WARNING: No regex provided for target function names. Using default regex: {default_regex}")
+        print(f"WARNING: No regex provided for target function names. Using default regex: {DEFAULT_REGEX}")
 
     functions = parse_c_file(filepath, func_regex)
 

@@ -5,7 +5,7 @@ import random
 import numpy as np
 
 DEFAULT_NUM_SAMPLES = 100000
-default_regex = "ex\\d+"
+DEFAULT_REGEX = "ex\\d+"
 
 np.random.seed(42)
 
@@ -49,11 +49,45 @@ def create_driver_function(functions, num_samples_per_func):
     driver_code = [
         "#include <iostream>",
         "#include <random>",
-        "",
-        "int main() {",
-        "    std::mt19937 gen(42);",
-        "",
+        "#include <cstring>",
+        "#include <chrono>",
     ]
+
+    driver_code.append("#include <fstream>")
+    driver_code.append("#include <limits>")
+    driver_code.append("#include <iomanip>")
+    driver_code.append("#include <string>")
+
+    driver_code.append("")
+    driver_code.append("int main(int argc, char* argv[]) {")
+    driver_code.append('    std::string output_path = "";')
+    driver_code.append("")
+    driver_code.append("    for (int i = 1; i < argc; ++i) {")
+    driver_code.append('        if (std::strcmp(argv[i], "--output-path") == 0) {')
+    driver_code.append("            if (i + 1 < argc) {")
+    driver_code.append("                output_path = argv[i + 1];")
+    driver_code.append("                i++;")
+    driver_code.append("            } else {")
+    driver_code.append('                std::cerr << "Error: --output-path requires a path argument." << std::endl;')
+    driver_code.append("                return 1;")
+    driver_code.append("            }")
+    driver_code.append("        }")
+    driver_code.append("    }")
+    driver_code.append("")
+    driver_code.append("    bool save_outputs = !output_path.empty();")
+    driver_code.append("")
+    driver_code.append("    std::mt19937 gen(42);")
+    driver_code.append("")
+    driver_code.append("    std::ofstream ofs;")
+    driver_code.append("    if (save_outputs) {")
+    driver_code.append("        ofs.open(output_path);")
+    driver_code.append("        if (!ofs) {")
+    driver_code.append('            std::cerr << "Failed to open output file: " << output_path << std::endl;')
+    driver_code.append("            return 1;")
+    driver_code.append("        }")
+    driver_code.append("    }")
+    driver_code.append("")
+
     driver_code.append("    initializeLogger();")
 
     for func_name, bounds, params, return_type in functions:
@@ -74,7 +108,10 @@ def create_driver_function(functions, num_samples_per_func):
             driver_code.append(f"    std::uniform_real_distribution<double> {dist_name}({min_val}, {max_val});")
     driver_code.append("")
 
-    driver_code.append("    double res = 0.;")
+    driver_code.append("    double sum = 0.;")
+    driver_code.append("")
+
+    driver_code.append("    auto start_time = std::chrono::high_resolution_clock::now();")
     driver_code.append("")
 
     for func_name, bounds, params, return_type in functions:
@@ -92,12 +129,28 @@ def create_driver_function(functions, num_samples_per_func):
             call_params.append(param_value)
 
         driver_code.append(
-            f"    res += __enzyme_autodiff<{return_type}>((void *) {func_name}, {', '.join(call_params)});"
+            f"        double res = __enzyme_autodiff<{return_type}>((void *) {func_name}, {', '.join(call_params)});"
         )
+        driver_code.append("        sum += res;")
+        driver_code.append("        if (save_outputs) {")
+        driver_code.append(
+            '            ofs << std::setprecision(std::numeric_limits<double>::digits10 + 1) << res << "\\n";'
+        )
+        driver_code.append("        }")
         driver_code.append("    }")
         driver_code.append("")
 
-    driver_code.append('    std::cout << "Sum: " << res << std::endl;')
+    driver_code.append('    std::cout << "Sum: " << sum << std::endl;')
+    driver_code.append("    auto end_time = std::chrono::high_resolution_clock::now();")
+    driver_code.append("    std::chrono::duration<double> elapsed = end_time - start_time;")
+    driver_code.append('    std::cout << "Total runtime: " << elapsed.count() << " seconds\\n";')
+    driver_code.append("")
+
+    driver_code.append("    if (save_outputs) {")
+    driver_code.append("        ofs.close();")
+    driver_code.append("    }")
+    driver_code.append("")
+
     driver_code.append("    printLogger();")
     driver_code.append("    destroyLogger();")
     driver_code.append("    return 0;")
@@ -107,14 +160,14 @@ def create_driver_function(functions, num_samples_per_func):
 
 def main():
     if len(sys.argv) < 2:
-        exit("Usage: script.py <filepath> [function_regex] [num_samples_per_func (default: 10000)]")
+        exit(f"Usage: script.py <filepath> [function_regex] [num_samples_per_func (default: {DEFAULT_NUM_SAMPLES})]")
 
     filepath = sys.argv[1]
-    func_regex = sys.argv[2] if len(sys.argv) > 2 else default_regex
+    func_regex = sys.argv[2] if len(sys.argv) > 2 else DEFAULT_REGEX
     num_samples_per_func = int(sys.argv[3]) if len(sys.argv) > 3 else DEFAULT_NUM_SAMPLES
 
     if len(sys.argv) <= 2:
-        print(f"WARNING: No regex provided for target function names. Using default regex: {default_regex}")
+        print(f"WARNING: No regex provided for target function names. Using default regex: {DEFAULT_REGEX}")
 
     functions = parse_c_file(filepath, func_regex)
     driver_code = create_driver_function(functions, num_samples_per_func)
