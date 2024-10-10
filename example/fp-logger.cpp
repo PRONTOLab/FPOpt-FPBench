@@ -34,7 +34,7 @@ public:
     ++executions;
 
     if (!std::isnan(res)) {
-      logSum += std::log(1. + std::fabs(res));
+      logSum += std::log1p(std::fabs(res));
       ++logCount;
     }
   }
@@ -43,7 +43,7 @@ public:
     if (logCount == 0) {
       return 0.;
     }
-    return std::exp(logSum / logCount) - 1.;
+    return std::expm1(logSum / logCount);
   }
 };
 
@@ -65,7 +65,7 @@ public:
 
   void update(double grad) {
     if (!std::isnan(grad)) {
-      logSum += std::log(1. + std::fabs(grad));
+      logSum += std::log1p(std::fabs(grad));
       ++count;
     }
   }
@@ -74,7 +74,7 @@ public:
     if (count == 0) {
       return 0.;
     }
-    return std::exp(logSum / count) - 1.;
+    return std::expm1(logSum / count);
   }
 };
 
