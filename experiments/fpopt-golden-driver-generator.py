@@ -127,11 +127,11 @@ def create_driver_function(functions, num_samples_per_func):
 
         call_params_str = ", ".join(call_params)
 
-        driver_code.append(f"        double result = {func_name}({call_params_str});")
+        driver_code.append(f"        double res = {func_name}({call_params_str});")
 
         driver_code.append("        if (save_outputs) {")
         driver_code.append(
-            '            ofs << std::setprecision(std::numeric_limits<double>::digits10 + 1) << result << "\\n";'
+            '            ofs << std::setprecision(std::numeric_limits<double>::digits10 + 1) << res << "\\n";'
         )
         driver_code.append("        }")
 
