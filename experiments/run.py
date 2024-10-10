@@ -253,17 +253,22 @@ def measure_runtime(tmp_dir, prefix, executable, num_runs=NUM_RUNS):
     runtimes = []
     exe_path = os.path.join(tmp_dir, f"{prefix}{executable}")
     for i in range(1, num_runs + 1):
-        start_time = time.perf_counter()
         try:
-            subprocess.check_call([exe_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            result = subprocess.run([exe_path], capture_output=True, text=True, check=True)
+            output = result.stdout
+            match = re.search(r"Total runtime: ([\d\.]+) seconds", output)
+            if match:
+                runtime = float(match.group(1))
+                runtimes.append(runtime)
+                print(f"Run {i}: {runtime:.6f} seconds")
+            else:
+                print(f"Could not parse runtime from output on run {i}")
+                sys.exit(1)
         except subprocess.CalledProcessError as e:
             print(f"Error running {exe_path} on run {i}")
             sys.exit(e.returncode)
-        end_time = time.perf_counter()
-        runtime = end_time - start_time
-        runtimes.append(runtime)
     average_runtime = mean(runtimes)
-    print(f"Average runtime for {executable}: {average_runtime:.4f} seconds")
+    print(f"Average runtime for {executable}: {average_runtime:.6f} seconds")
     return average_runtime
 
 
@@ -315,7 +320,7 @@ def benchmark(tmp_dir, logs_dir, prefix, plots_dir):
     costs = parse_critical_comp_costs(tmp_dir, prefix)
 
     baseline_runtime = measure_baseline_runtime(tmp_dir, prefix, NUM_RUNS)
-    print(f"Baseline average runtime: {baseline_runtime:.4f} seconds")
+    print(f"Baseline average runtime: {baseline_runtime:.6f} seconds")
 
     print("\n=== Measuring adjusted runtime for example.exe ===")
     avg_runtime_example = measure_runtime(tmp_dir, prefix, "example.exe", NUM_RUNS)

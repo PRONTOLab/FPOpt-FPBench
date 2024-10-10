@@ -170,7 +170,7 @@ def create_baseline_driver_function(functions, num_samples_per_func):
 def main():
     if len(sys.argv) < 3:
         exit(
-            "Usage: fpopt-logged-driver-generator.py <source_path> <dest_path> [func_regex] [num_samples_per_func (default: 10000)]"
+            "Usage: fpopt-baseline-generator.py <source_path> <dest_path> [func_regex] [num_samples_per_func (default: 10000)]"
         )
 
     source_path = sys.argv[1]

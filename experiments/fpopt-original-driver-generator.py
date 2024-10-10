@@ -106,6 +106,9 @@ def create_driver_function(functions, num_samples_per_func):
             driver_code.append(f"    std::uniform_real_distribution<double> {dist_name}({min_val}, {max_val});")
     driver_code.append("")
 
+    driver_code.append("    double sum = 0.;")
+    driver_code.append("")
+
     driver_code.append("    auto start_time = std::chrono::high_resolution_clock::now();")
     driver_code.append("")
 
@@ -128,6 +131,7 @@ def create_driver_function(functions, num_samples_per_func):
         call_params_str = ", ".join(call_params)
 
         driver_code.append(f"        double res = {func_name}({call_params_str});")
+        driver_code.append("        sum += res;")
 
         driver_code.append("        if (save_outputs) {")
         driver_code.append(
@@ -138,6 +142,7 @@ def create_driver_function(functions, num_samples_per_func):
         driver_code.append("    }")
         driver_code.append("")
 
+    driver_code.append('    std::cout << "Sum: " << sum << std::endl;')
     driver_code.append("    auto end_time = std::chrono::high_resolution_clock::now();")
     driver_code.append("    std::chrono::duration<double> elapsed = end_time - start_time;")
     driver_code.append('    std::cout << "Total runtime: " << elapsed.count() << " seconds\\n";')

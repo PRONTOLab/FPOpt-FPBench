@@ -3,7 +3,7 @@ import sys
 import re
 
 DEFAULT_NUM_SAMPLES = 100000
-default_regex = "ex\\d+"
+DEFAULT_REGEX = "ex\\d+"
 
 
 def parse_bound(bound):
@@ -106,6 +106,9 @@ def create_driver_function(functions, num_samples_per_func):
             driver_code.append(f"    std::uniform_real_distribution<double> {dist_name}({min_val}, {max_val});")
     driver_code.append("")
 
+    driver_code.append("    double sum = 0.;")
+    driver_code.append("")
+
     driver_code.append("    auto start_time = std::chrono::high_resolution_clock::now();")
     driver_code.append("")
 
@@ -128,6 +131,7 @@ def create_driver_function(functions, num_samples_per_func):
         call_params_str = ", ".join(call_params)
 
         driver_code.append(f"        double res = {func_name}({call_params_str});")
+        driver_code.append("        sum += res;")
 
         driver_code.append("        if (save_outputs) {")
         driver_code.append(
@@ -138,6 +142,7 @@ def create_driver_function(functions, num_samples_per_func):
         driver_code.append("    }")
         driver_code.append("")
 
+    driver_code.append('    std::cout << "Sum: " << sum << std::endl;')
     driver_code.append("    auto end_time = std::chrono::high_resolution_clock::now();")
     driver_code.append("    std::chrono::duration<double> elapsed = end_time - start_time;")
     driver_code.append('    std::cout << "Total runtime: " << elapsed.count() << " seconds\\n";')
@@ -154,24 +159,22 @@ def create_driver_function(functions, num_samples_per_func):
 
 
 def main():
-    if len(sys.argv) < 3:
-        exit("Usage: script.py <filepath> <PREC> [function_regex] [num_samples_per_func (default: 100000)]")
+    if len(sys.argv) < 4:
+        exit(
+            f"Usage: fpopt-golden-driver-generator.py <source_path> <dest_path> <PREC> [func_regex] [num_samples_per_func (default: {DEFAULT_NUM_SAMPLES})]"
+        )
 
-    filepath = sys.argv[1]
-    PREC = sys.argv[2]
+    source_path = sys.argv[1]
+    dest_path = sys.argv[2]
+    PREC = sys.argv[3]
+    func_regex = sys.argv[4] if len(sys.argv) > 4 else DEFAULT_REGEX
+    num_samples_per_func = int(sys.argv[5]) if len(sys.argv) > 5 else DEFAULT_NUM_SAMPLES
 
-    func_regex = sys.argv[3] if len(sys.argv) > 3 else default_regex
-    num_samples_per_func = int(sys.argv[4]) if len(sys.argv) > 4 else DEFAULT_NUM_SAMPLES
-
-    if len(sys.argv) <= 3:
-        print(f"WARNING: No regex provided for target function names. Using default regex: {default_regex}")
-
-    functions, original_content, matches = parse_c_file(filepath, func_regex)
+    functions, original_content, matches = parse_c_file(source_path, func_regex)
 
     driver_code = create_driver_function(functions, num_samples_per_func)
-    new_filepath = os.path.splitext(filepath)[0] + "-golden.cpp"
 
-    with open(filepath, "r") as original_file:
+    with open(source_path, "r") as original_file:
         original_content = original_file.read()
 
     mpfr_header = f'#include "mpfrcpp.hpp"\nconst unsigned int PREC = {PREC};\n#define double mpfrcpp<PREC>\n\n'
@@ -183,11 +186,11 @@ def main():
     else:
         exit("No matching functions found to insert mpfr header.")
 
-    with open(new_filepath, "w") as new_file:
+    with open(dest_path, "w") as new_file:
         new_file.write(modified_content)
         new_file.write("\n\n" + driver_code)
 
-    print(f"Driver program written to: {new_filepath}")
+    print(f"Driver program written to: {dest_path}")
 
 
 if __name__ == "__main__":
