@@ -17,7 +17,6 @@ public:
   std::vector<double> minOperands;
   std::vector<double> maxOperands;
   unsigned executions = 0;
-
   double logSum = 0.0;
   unsigned logCount = 0;
 
@@ -34,18 +33,17 @@ public:
     }
     ++executions;
 
-    if (res != 0.) {
-      logSum += std::log(std::fabs(res));
+    if (!std::isnan(res)) {
+      logSum += std::log(1. + std::fabs(res));
       ++logCount;
     }
   }
 
   double getGeometricAverage() const {
-    if (logCount > 0) {
-      return std::exp(logSum / logCount);
-    } else {
-      return 0.0;
+    if (logCount == 0) {
+      return 0.;
     }
+    return std::exp(logSum / logCount) - 1.;
   }
 };
 
@@ -66,18 +64,17 @@ public:
   unsigned count = 0;
 
   void update(double grad) {
-    if (grad != 0.) {
-      logSum += std::log(std::fabs(grad));
+    if (!std::isnan(grad)) {
+      logSum += std::log(1. + std::fabs(grad));
       ++count;
     }
   }
 
   double getGeometricAverage() const {
-    if (count > 0) {
-      return std::exp(logSum / count);
-    } else {
-      return 0.0;
+    if (count == 0) {
+      return 0.;
     }
+    return std::exp(logSum / count) - 1.;
   }
 };
 

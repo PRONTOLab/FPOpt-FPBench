@@ -10,7 +10,7 @@ CXXFLAGS = -I/home/brant/include \
            -fno-exceptions \
            -fpass-plugin=$(ENZYME_PATH) \
            -Xclang -load -Xclang $(ENZYME_PATH) \
-           -lmpfr -O3 -ffast-math -fuse-ld=lld
+           -lmpfr -ffast-math -fno-finite-math-only -fuse-ld=lld
 
 FPOPTFLAGS += -mllvm --enzyme-enable-fpopt \
 		   -mllvm --enzyme-print-herbie \

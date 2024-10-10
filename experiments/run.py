@@ -31,6 +31,7 @@ CXXFLAGS = [
     ENZYME_PATH,
     "-lmpfr",
     "-ffast-math",
+    "-fno-finite-math-only",
     "-fuse-ld=lld",
 ]
 
