@@ -333,7 +333,7 @@ def get_avg_rel_error(tmp_dir, prefix, golden_values_file, binaries):
                 continue
             if g == 0:
                 continue
-            error = abs((v - g) / g)
+            error = abs((v - g) / g) * 100
             valid_errors.append(error)
 
         if not valid_errors:
@@ -374,13 +374,14 @@ def plot_results(plots_dir, prefix, budgets, runtimes, errors, example_adjusted_
 
     ax2 = ax1.twinx()
     color_error = "tab:green"
-    ax2.set_ylabel("Relative Errors", color=color_error)
+    ax2.set_ylabel("Relative Errors (%)", color=color_error)
     (line3,) = ax2.plot(
         budgets, errors, marker="s", linestyle="-", label="Optimized Relative Errors", color=color_error
     )
     if example_rel_err is not None:
         line4 = ax2.axhline(y=example_rel_err, color=color_error, linestyle=":", label="Original Relative Error")
     ax2.tick_params(axis="y", labelcolor=color_error)
+    ax2.set_yscale("log")
 
     ax1.set_title(f"Computation Cost Budget vs Runtime and Relative Error ({prefix[:-1]})")
     ax1.grid(True)
@@ -398,7 +399,7 @@ def plot_results(plots_dir, prefix, budgets, runtimes, errors, example_adjusted_
 
     # Second Plot: Pareto Front of Optimized Programs
     ax3.set_xlabel("Runtimes (seconds)")
-    ax3.set_ylabel("Relative Errors")
+    ax3.set_ylabel("Relative Errors (%)")
     ax3.set_title(f"Pareto Front of Optimized {prefix[:-1]} Binaries")
 
     scatter1 = ax3.scatter(runtimes, errors, label="Optimized Programs", color="blue")
@@ -423,6 +424,7 @@ def plot_results(plots_dir, prefix, budgets, runtimes, errors, example_adjusted_
     (line_pareto,) = ax3.plot(
         pareto_front[:, 0], pareto_front[:, 1], linestyle="-", color="purple", label="Pareto Front"
     )
+    ax3.set_yscale("log")
 
     ax3.grid(True)
 
