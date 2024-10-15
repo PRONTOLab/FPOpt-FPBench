@@ -2,7 +2,8 @@ ENZYME_PATH ?= /home/brant/sync/Enzyme/build/Enzyme/ClangEnzyme-15.so
 LLVM_PATH ?= /home/brant/llvms/llvm15/build/bin
 CXX = $(LLVM_PATH)/clang++
 
-CXXFLAGS = -I/home/brant/include \
+CXXFLAGS = -O3 -Wall \
+		   -I/home/brant/include \
            -L/home/brant/lib \
            -I /usr/include/c++/11 \
            -I /usr/include/x86_64-linux-gnu/c++/11 \
@@ -41,13 +42,13 @@ example-logged.cpp: $(SRC)
 	python3 fpopt-logged-driver-generator.py $(SRC) example
 
 example.exe: example.cpp
-	$(CXX) -Wall -O3 example.cpp $(CXXFLAGS) -o $@
+	$(CXX) example.cpp $(CXXFLAGS) -o $@
 
 example-golden.exe: example-golden.cpp
-	$(CXX) -Wall -O3 example-golden.cpp $(CXXFLAGS) -lmpfr -o $@
+	$(CXX) example-golden.cpp $(CXXFLAGS) -lmpfr -o $@
 
 example-logged.exe: example-logged.cpp $(LOGGER)
-	$(CXX) -Wall -O3 $(LOGGER) example-logged.cpp $(CXXFLAGS) -o $@
+	$(CXX) $(LOGGER) example-logged.cpp $(CXXFLAGS) -mllvm --enzyme-inline=0 -o $@
 
 example.txt: example-logged.exe
 	./example-logged.exe > $@
