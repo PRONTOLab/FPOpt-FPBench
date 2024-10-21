@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 import math
 import numpy as np
 from statistics import mean
+import pickle
 
 from tqdm import tqdm, trange
 
@@ -361,13 +362,13 @@ def plot_results(plots_dir, prefix, budgets, runtimes, errors, example_adjusted_
     plot_filename = os.path.join(plots_dir, f"runtime_error_plot_{prefix[:-1]}.png")
     print(f"=== Plotting results to {plot_filename} ===")
 
-    fig, (ax1, ax3) = plt.subplots(1, 2, figsize=(20, 6))
+    fig, (ax1, ax3) = plt.subplots(1, 2, figsize=(20, 8))
 
     # First Plot: Computation Cost Budget vs Runtime and Relative Error
     color_runtime = "tab:blue"
     ax1.set_xlabel("Computation Cost Budget")
     ax1.set_ylabel("Runtimes (seconds)", color=color_runtime)
-    (line1,) = ax1.plot(budgets, runtimes, marker="o", linestyle="-", label="Optimized Runtimes", color=color_runtime)
+    (line1,) = ax1.plot(budgets, runtimes, marker="o", linestyle="-", label="Poseidoned Runtimes", color=color_runtime)
     if example_adjusted_runtime is not None:
         line2 = ax1.axhline(y=example_adjusted_runtime, color=color_runtime, linestyle=":", label="Original Runtime")
     ax1.tick_params(axis="y", labelcolor=color_runtime)
@@ -376,7 +377,7 @@ def plot_results(plots_dir, prefix, budgets, runtimes, errors, example_adjusted_
     color_error = "tab:green"
     ax2.set_ylabel("Relative Errors (%)", color=color_error)
     (line3,) = ax2.plot(
-        budgets, errors, marker="s", linestyle="-", label="Optimized Relative Errors", color=color_error
+        budgets, errors, marker="s", linestyle="-", label="Poseidoned Relative Errors", color=color_error
     )
     if example_rel_err is not None:
         line4 = ax2.axhline(y=example_rel_err, color=color_error, linestyle=":", label="Original Relative Error")
@@ -395,14 +396,22 @@ def plot_results(plots_dir, prefix, budgets, runtimes, errors, example_adjusted_
         lines.append(line4)
         labels.append(line4.get_label())
 
-    ax1.legend(lines, labels, loc="upper left", bbox_to_anchor=(1.05, 1), borderaxespad=0.0)
+    ax1.legend(
+        lines,
+        labels,
+        loc="upper center",
+        bbox_to_anchor=(0.5, -0.15),
+        ncol=len(lines),
+        borderaxespad=0.0,
+        frameon=False,
+    )
 
-    # Second Plot: Pareto Front of Optimized Programs
+    # Second Plot: Pareto Front of Poseidoned Programs
     ax3.set_xlabel("Runtimes (seconds)")
     ax3.set_ylabel("Relative Errors (%)")
-    ax3.set_title(f"Pareto Front of Optimized {prefix[:-1]} Binaries")
+    ax3.set_title(f"Pareto Front of Poseidoned Programs ({prefix[:-1]})")
 
-    scatter1 = ax3.scatter(runtimes, errors, label="Optimized Programs", color="blue")
+    scatter1 = ax3.scatter(runtimes, errors, label="Poseidoned Programs", color="blue")
 
     if example_adjusted_runtime is not None and example_rel_err is not None:
         scatter2 = ax3.scatter(
@@ -434,12 +443,20 @@ def plot_results(plots_dir, prefix, budgets, runtimes, errors, example_adjusted_
         pareto_lines.append(scatter2)
         pareto_labels.append(scatter2.get_label())
 
-    ax3.legend(pareto_lines, pareto_labels, loc="upper left", bbox_to_anchor=(1.05, 1), borderaxespad=0.0)
+    ax3.legend(
+        pareto_lines,
+        pareto_labels,
+        loc="upper center",
+        bbox_to_anchor=(0.5, -0.15),
+        ncol=len(pareto_lines),
+        borderaxespad=0.0,
+        frameon=False,
+    )
 
     plt.tight_layout()
-    plt.subplots_adjust(right=0.75)
+    plt.subplots_adjust(bottom=0.25)
 
-    plt.savefig(plot_filename, bbox_inches="tight")
+    plt.savefig(plot_filename, bbox_inches="tight", dpi=300)
     plt.close()
     print(f"Plot saved to {plot_filename}")
 
@@ -523,6 +540,18 @@ def benchmark(tmp_dir, logs_dir, prefix, plots_dir):
         errors.append(errors_dict[binary])
         print(f"Average rel error for {binary}: {errors_dict[binary]}")
 
+    data = {
+        "budgets": budgets,
+        "runtimes": runtimes,
+        "errors": errors,
+        "example_adjusted_runtime": adjusted_runtime_example,
+        "example_rel_err": rel_err_example,
+    }
+    data_file = os.path.join(tmp_dir, f"{prefix}benchmark_data.pkl")
+    with open(data_file, "wb") as f:
+        pickle.dump(data, f)
+    print(f"Benchmark data saved to {data_file}")
+
     plot_results(
         plots_dir,
         prefix,
@@ -531,6 +560,24 @@ def benchmark(tmp_dir, logs_dir, prefix, plots_dir):
         errors,
         example_adjusted_runtime=adjusted_runtime_example,
         example_rel_err=rel_err_example,
+    )
+
+
+def plot_from_data(tmp_dir, plots_dir, prefix):
+    data_file = os.path.join(tmp_dir, f"{prefix}benchmark_data.pkl")
+    if not os.path.exists(data_file):
+        print(f"Data file {data_file} does not exist. Cannot plot.")
+        sys.exit(1)
+    with open(data_file, "rb") as f:
+        data = pickle.load(f)
+    plot_results(
+        plots_dir,
+        prefix,
+        data["budgets"],
+        data["runtimes"],
+        data["errors"],
+        example_adjusted_runtime=data["example_adjusted_runtime"],
+        example_rel_err=data["example_rel_err"],
     )
 
 
@@ -546,6 +593,7 @@ def main():
     parser.add_argument("--build", action="store_true", help="Build all components")
     parser.add_argument("--benchmark", action="store_true", help="Run benchmark")
     parser.add_argument("--all", action="store_true", help="Build and run benchmark")
+    parser.add_argument("--plot-only", action="store_true", help="Plot results from existing data")
     args = parser.parse_args()
 
     prefix = args.prefix
@@ -568,6 +616,9 @@ def main():
         sys.exit(0)
     elif args.benchmark:
         benchmark(tmp_dir, logs_dir, prefix, plots_dir)
+        sys.exit(0)
+    elif args.plot_only:
+        plot_from_data(tmp_dir, plots_dir, prefix)
         sys.exit(0)
     elif args.all:
         build_with_benchmark(tmp_dir, logs_dir, plots_dir, prefix)
