@@ -37,6 +37,8 @@ CXXFLAGS = [
     "-ffast-math",
     "-fno-finite-math-only",
     "-fuse-ld=lld",
+    "-mllvm",
+    "--enzyme-preopt=0",
 ]
 
 FPOPTFLAGS_BASE = [
@@ -692,6 +694,35 @@ def analyze_all_data(tmp_dir, thresholds=None):
             print(f"{prefix}: {improvement:.2f} bits")
         else:
             print(f"{prefix}: No improvement")
+
+    improvements = list(max_accuracy_improvements.values())
+
+    if not improvements:
+        print("\nNo accuracy improvements available to compute geometric mean.")
+    else:
+        try:
+            log_sum = sum(math.log1p(impr) for impr in improvements)
+            geo_mean = math.expm1(log_sum / len(improvements))
+            print(f"\nAdjusted Geometric mean of maximum accuracy improvements: {geo_mean:.2f} bits")
+        except ValueError as e:
+            print(f"\nError in computing geometric mean: {e}")
+
+        positive_improvements = [impr for impr in improvements if impr > 0]
+        print(positive_improvements)
+
+        if not positive_improvements:
+            print(
+                "Geometric mean of maximum accuracy improvements (excluding zeros): No positive improvements available."
+            )
+        else:
+            try:
+                log_sum_excluding = sum(math.log(impr) for impr in positive_improvements)
+                geo_mean_excluding = math.exp(log_sum_excluding / len(positive_improvements))
+                print(
+                    f"Geometric mean of maximum accuracy improvements (excluding zeros): {geo_mean_excluding:.2f} bits"
+                )
+            except ValueError as e:
+                print(f"Error in computing geometric mean (excluding zeros): {e}")
 
     print("\nGeometric average percentage of runtime improvements while allowing some level of relative error:")
     for threshold in thresholds:
