@@ -390,7 +390,7 @@ def plot_results(
         )
         if example_adjusted_runtime is not None:
             line2 = ax1.axhline(
-                y=example_adjusted_runtime, color=color_runtime, linestyle=":", label="Original Runtime"
+                y=example_adjusted_runtime, color=color_runtime, linestyle="--", label="Original Runtime"
             )
         ax1.tick_params(axis="y", labelcolor=color_runtime)
 
@@ -401,7 +401,7 @@ def plot_results(
             budgets, errors, marker="s", linestyle="-", label="Optimized Relative Errors", color=color_error
         )
         if example_rel_err is not None:
-            line4 = ax2.axhline(y=example_rel_err, color=color_error, linestyle=":", label="Original Relative Error")
+            line4 = ax2.axhline(y=example_rel_err, color=color_error, linestyle="--", label="Original Relative Error")
         ax2.tick_params(axis="y", labelcolor=color_error)
         ax2.set_yscale("log")
 
@@ -510,7 +510,7 @@ def plot_results(
         )
         if example_adjusted_runtime is not None:
             line2 = ax1.axhline(
-                y=example_adjusted_runtime, color=color_runtime, linestyle=":", label="Original Runtime"
+                y=example_adjusted_runtime, color=color_runtime, linestyle="--", label="Original Runtime"
             )
         ax1.tick_params(axis="y", labelcolor=color_runtime)
 
@@ -521,7 +521,7 @@ def plot_results(
             budgets, errors, marker="s", linestyle="-", label="Optimized Relative Errors", color=color_error
         )
         if example_rel_err is not None:
-            line4 = ax2.axhline(y=example_rel_err, color=color_error, linestyle=":", label="Original Relative Error")
+            line4 = ax2.axhline(y=example_rel_err, color=color_error, linestyle="--", label="Original Relative Error")
         ax2.tick_params(axis="y", labelcolor=color_error)
         ax2.set_yscale("log")
 
@@ -800,7 +800,7 @@ def analyze_all_data(tmp_dir, thresholds=None):
                 for threshold in thresholds:
                     if err <= threshold * 100:
                         runtime_ratio = runtime / example_adjusted_runtime
-                        runtime_ratios_per_threshold[threshold].append(runtime_ratio)
+                        runtime_ratios_per_threshold[threshold].append(runtime_ratio) # Problematic!
 
     overall_runtime_improvements = {}
     for threshold in thresholds:
