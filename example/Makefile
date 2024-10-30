@@ -1,10 +1,11 @@
-ENZYME_PATH ?= /home/brant/sync/Enzyme/build/Enzyme/ClangEnzyme-15.so
-LLVM_PATH ?= /home/brant/llvms/llvm15/build/bin
+HOME ?= /home/sbrantq
+ENZYME_PATH ?= $(HOME)/sync/Enzyme/build/Enzyme/ClangEnzyme-15.so
+LLVM_PATH ?= $(HOME)/llvms/llvm15/build/bin
 CXX = $(LLVM_PATH)/clang++
 
 CXXFLAGS = -O3 -Wall \
-		   -I/home/brant/include \
-           -L/home/brant/lib \
+		   -I$(HOME)/include \
+           -L$(HOME)/lib \
            -I /usr/include/c++/11 \
            -I /usr/include/x86_64-linux-gnu/c++/11 \
            -L /usr/lib/gcc/x86_64-linux-gnu/11 \

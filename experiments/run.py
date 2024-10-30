@@ -9,6 +9,7 @@ import re
 import argparse
 import matplotlib.pyplot as plt
 import math
+import random
 import numpy as np
 from statistics import mean
 import pickle
@@ -16,14 +17,15 @@ import pickle
 from tqdm import tqdm, trange
 from matplotlib import rcParams
 
-ENZYME_PATH = "/home/brant/sync/Enzyme/build/Enzyme/ClangEnzyme-15.so"
-LLVM_PATH = "/home/brant/llvms/llvm15/build/bin"
+HOME = "/home/sbrantq"
+ENZYME_PATH = os.path.join(HOME, "sync/Enzyme/build/Enzyme/ClangEnzyme-15.so")
+LLVM_PATH = os.path.join(HOME, "llvms/llvm15/build/bin")
 CXX = os.path.join(LLVM_PATH, "clang++")
 
 CXXFLAGS = [
     "-O3",
-    "-I/home/brant/include",
-    "-L/home/brant/lib",
+    "-I" + os.path.join(HOME, "include"),
+    "-L" + os.path.join(HOME, "lib"),
     "-I/usr/include/c++/11",
     "-I/usr/include/x86_64-linux-gnu/c++/11",
     "-L/usr/lib/gcc/x86_64-linux-gnu/11",
@@ -57,9 +59,13 @@ FPOPTFLAGS_BASE = [
     "-mllvm",
     "--fpopt-comp-cost-budget=0",
     "-mllvm",
-    "--fpopt-num-samples=10000",
+    "--fpopt-num-samples=1000",
     "-mllvm",
     "--fpopt-cost-model-path=../microbm/cm.csv",
+    # "-mllvm",
+    # "--herbie-disable-regime",
+    # "-mllvm",
+    # "--herbie-disable-taylor"
 ]
 
 SRC = "example.c"
@@ -67,6 +73,7 @@ LOGGER = "fp-logger.cpp"
 EXE = ["example.exe", "example-logged.exe", "example-fpopt.exe"]
 NUM_RUNS = 100
 DRIVER_NUM_SAMPLES = 10000000
+MAX_TESTED_COSTS = 20
 
 
 def run_command(command, description, capture_output=False, output_file=None, verbose=True):
@@ -222,7 +229,20 @@ def parse_critical_comp_costs(tmp_dir, prefix, log_path="compile_fpopt.log"):
     costs_str = match.group(1).strip()
     costs = [int(cost) for cost in costs_str.split(",") if re.fullmatch(r"-?\d+", cost.strip())]
     print(f"Parsed computation costs: {costs}")
-    return costs
+
+    if not costs:
+        print("No valid computation costs found to sample.")
+        sys.exit(1)
+
+    num_to_sample = min(MAX_TESTED_COSTS, len(costs))
+
+    sampled_costs = random.sample(costs, num_to_sample)
+
+    sampled_costs_sorted = sorted(sampled_costs)
+
+    print(f"Sampled computation costs (sorted): {sampled_costs_sorted}")
+
+    return sampled_costs_sorted
 
 
 def measure_runtime(tmp_dir, prefix, executable, num_runs=NUM_RUNS):
@@ -371,12 +391,12 @@ def plot_results(
 ):
     print(f"=== Plotting results to {output_format.upper()} file ===")
 
-    rcParams["font.size"] = 16
-    rcParams["axes.titlesize"] = 18
-    rcParams["axes.labelsize"] = 16
-    rcParams["xtick.labelsize"] = 14
-    rcParams["ytick.labelsize"] = 14
-    rcParams["legend.fontsize"] = 14
+    rcParams["font.size"] = 20
+    rcParams["axes.titlesize"] = 24
+    rcParams["axes.labelsize"] = 20
+    rcParams["xtick.labelsize"] = 18
+    rcParams["ytick.labelsize"] = 18
+    rcParams["legend.fontsize"] = 18
 
     if output_format.lower() == "pdf":
         # First Plot: Computation Cost Budget vs Runtime and Relative Error
@@ -405,7 +425,7 @@ def plot_results(
         ax2.tick_params(axis="y", labelcolor=color_error)
         ax2.set_yscale("log")
 
-        ax1.set_title(f"Computation Cost Budget vs Runtime and Relative Error ({prefix[:-1]})")
+        ax1.set_title(f"Computation Cost Budget vs Runtime\nand Relative Error ({prefix[:-1]})")
         ax1.grid(True)
 
         lines = [line1, line3]
@@ -422,7 +442,7 @@ def plot_results(
             labels,
             loc="upper center",
             bbox_to_anchor=(0.5, -0.15),
-            ncol=len(lines),
+            ncol=2,
             borderaxespad=0.0,
             frameon=False,
         )
@@ -800,7 +820,7 @@ def analyze_all_data(tmp_dir, thresholds=None):
                 for threshold in thresholds:
                     if err <= threshold * 100:
                         runtime_ratio = runtime / example_adjusted_runtime
-                        runtime_ratios_per_threshold[threshold].append(runtime_ratio) # Problematic!
+                        runtime_ratios_per_threshold[threshold].append(runtime_ratio)  # Problematic!
 
     overall_runtime_improvements = {}
     for threshold in thresholds:

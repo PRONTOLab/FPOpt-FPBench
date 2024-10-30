@@ -3,6 +3,7 @@ import re
 import subprocess
 import glob
 import multiprocessing
+import argparse
 
 
 def extract_functions_from_c_file(content, func_regex="ex\\d+"):
@@ -83,35 +84,44 @@ def process_function_task(task):
 
 
 def main():
-    benchmark_dir = "../benchmarks"
+    parser = argparse.ArgumentParser(description="Process functions from .fpcore files.")
+    parser.add_argument("-j", type=int, help="Number of parallel tasks", default=multiprocessing.cpu_count())
+    parser.add_argument("--regen", action="store_true", help="Force regeneration of .c files")
+    args = parser.parse_args()
+
+    num_parallel_tasks = args.j
+    force_regen = args.regen
+
+    source_dir = "../benchmarks"
+    exported_dir = "exported"
     racket_script = "../export.rkt"
-    fpcore_files = glob.glob(os.path.join(benchmark_dir, "*.fpcore"))
+    fpcore_files = glob.glob(os.path.join(source_dir, "*.fpcore"))
 
     if not fpcore_files:
         print("No .fpcore files found in the benchmarks directory.")
         return
 
     os.makedirs("tmp", exist_ok=True)
+    os.makedirs("exported", exist_ok=True)
 
     tasks = []
 
     for fpcore_file in fpcore_files:
         filename = os.path.basename(fpcore_file)
         base_name = os.path.splitext(filename)[0]
-        print(f"Processing .fpcore file: {filename}")
-
         c_filename = f"{base_name}.fpcore.c"
-        c_filepath = os.path.join(benchmark_dir, c_filename)
-        print(f"Generating {c_filename} using Racket script...")
-        try:
-            subprocess.check_call(["racket", racket_script, fpcore_file, c_filepath])
-        except subprocess.CalledProcessError as e:
-            print(f"Error running export.rkt on {filename}")
-            continue
+        c_filepath = os.path.join(exported_dir, c_filename)
 
-        if not os.path.exists(c_filepath):
-            print(f"Generated .c file {c_filename} not found.")
-            continue
+        if not force_regen and os.path.exists(c_filepath):
+            print(f"{c_filename} already exists. Skipping generation.")
+        else:
+            print(f"Generating {c_filename} using Racket script...")
+            try:
+                print("Running command: ", " ".join(["racket", racket_script, fpcore_file, c_filepath]))
+                subprocess.check_call(["racket", racket_script, fpcore_file, c_filepath])
+            except subprocess.CalledProcessError as e:
+                print(f"Error running export.rkt on {filename}")
+                continue
 
         print(f"Processing generated .c file: {c_filename}")
         with open(c_filepath, "r") as f:
@@ -127,7 +137,7 @@ def main():
             tasks.append(task)
 
     if tasks:
-        with multiprocessing.Pool(8) as pool:
+        with multiprocessing.Pool(num_parallel_tasks) as pool:
             pool.map(process_function_task, tasks)
     else:
         print("No functions to process.")
