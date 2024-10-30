@@ -264,7 +264,7 @@ def measure_runtime(tmp_dir, prefix, executable, num_runs=NUM_RUNS):
             print(f"Error running {exe_path} on run {i}")
             sys.exit(e.returncode)
     average_runtime = mean(runtimes)
-    print(f"Average runtime for {executable}: {average_runtime:.6f} seconds")
+    print(f"Average runtime for {prefix}{executable}: {average_runtime:.6f} seconds")
     return average_runtime
 
 
@@ -385,8 +385,8 @@ def plot_results(
     budgets,
     runtimes,
     errors,
-    example_adjusted_runtime=None,
-    example_rel_err=None,
+    original_runtime=None,
+    original_error=None,
     output_format="png",
 ):
     print(f"=== Plotting results to {output_format.upper()} file ===")
@@ -408,10 +408,8 @@ def plot_results(
         (line1,) = ax1.plot(
             budgets, runtimes, marker="o", linestyle="-", label="Optimized Runtimes", color=color_runtime
         )
-        if example_adjusted_runtime is not None:
-            line2 = ax1.axhline(
-                y=example_adjusted_runtime, color=color_runtime, linestyle="--", label="Original Runtime"
-            )
+        if original_runtime is not None:
+            line2 = ax1.axhline(y=original_runtime, color=color_runtime, linestyle="--", label="Original Runtime")
         ax1.tick_params(axis="y", labelcolor=color_runtime)
 
         ax2 = ax1.twinx()
@@ -420,8 +418,8 @@ def plot_results(
         (line3,) = ax2.plot(
             budgets, errors, marker="s", linestyle="-", label="Optimized Relative Errors", color=color_error
         )
-        if example_rel_err is not None:
-            line4 = ax2.axhline(y=example_rel_err, color=color_error, linestyle="--", label="Original Relative Error")
+        if original_error is not None:
+            line4 = ax2.axhline(y=original_error, color=color_error, linestyle="--", label="Original Relative Error")
         ax2.tick_params(axis="y", labelcolor=color_error)
         ax2.set_yscale("log")
 
@@ -430,10 +428,10 @@ def plot_results(
 
         lines = [line1, line3]
         labels = [line.get_label() for line in lines]
-        if example_adjusted_runtime is not None:
+        if original_runtime is not None:
             lines.append(line2)
             labels.append(line2.get_label())
-        if example_rel_err is not None:
+        if original_error is not None:
             lines.append(line4)
             labels.append(line4.get_label())
 
@@ -463,10 +461,10 @@ def plot_results(
 
         scatter1 = ax3.scatter(runtimes, errors, label="Optimized Programs", color="blue")
 
-        if example_adjusted_runtime is not None and example_rel_err is not None:
+        if original_runtime is not None and original_error is not None:
             scatter2 = ax3.scatter(
-                example_adjusted_runtime,
-                example_rel_err,
+                original_runtime,
+                original_error,
                 marker="x",
                 color="red",
                 s=100,
@@ -494,7 +492,7 @@ def plot_results(
 
         pareto_lines = [scatter1, line_pareto]
         pareto_labels = [scatter1.get_label(), line_pareto.get_label()]
-        if example_adjusted_runtime is not None and example_rel_err is not None:
+        if original_runtime is not None and original_error is not None:
             pareto_lines.append(scatter2)
             pareto_labels.append(scatter2.get_label())
 
@@ -528,10 +526,8 @@ def plot_results(
         (line1,) = ax1.plot(
             budgets, runtimes, marker="o", linestyle="-", label="Optimized Runtimes", color=color_runtime
         )
-        if example_adjusted_runtime is not None:
-            line2 = ax1.axhline(
-                y=example_adjusted_runtime, color=color_runtime, linestyle="--", label="Original Runtime"
-            )
+        if original_runtime is not None:
+            line2 = ax1.axhline(y=original_runtime, color=color_runtime, linestyle="--", label="Original Runtime")
         ax1.tick_params(axis="y", labelcolor=color_runtime)
 
         ax2 = ax1.twinx()
@@ -540,8 +536,8 @@ def plot_results(
         (line3,) = ax2.plot(
             budgets, errors, marker="s", linestyle="-", label="Optimized Relative Errors", color=color_error
         )
-        if example_rel_err is not None:
-            line4 = ax2.axhline(y=example_rel_err, color=color_error, linestyle="--", label="Original Relative Error")
+        if original_error is not None:
+            line4 = ax2.axhline(y=original_error, color=color_error, linestyle="--", label="Original Relative Error")
         ax2.tick_params(axis="y", labelcolor=color_error)
         ax2.set_yscale("log")
 
@@ -550,10 +546,10 @@ def plot_results(
 
         lines = [line1, line3]
         labels = [line.get_label() for line in lines]
-        if example_adjusted_runtime is not None:
+        if original_runtime is not None:
             lines.append(line2)
             labels.append(line2.get_label())
-        if example_rel_err is not None:
+        if original_error is not None:
             lines.append(line4)
             labels.append(line4.get_label())
 
@@ -574,10 +570,10 @@ def plot_results(
 
         scatter1 = ax3.scatter(runtimes, errors, label="Optimized Programs", color="blue")
 
-        if example_adjusted_runtime is not None and example_rel_err is not None:
+        if original_runtime is not None and original_error is not None:
             scatter2 = ax3.scatter(
-                example_adjusted_runtime,
-                example_rel_err,
+                original_runtime,
+                original_error,
                 marker="x",
                 color="red",
                 s=100,
@@ -605,7 +601,7 @@ def plot_results(
 
         pareto_lines = [scatter1, line_pareto]
         pareto_labels = [scatter1.get_label(), line_pareto.get_label()]
-        if example_adjusted_runtime is not None and example_rel_err is not None:
+        if original_runtime is not None and original_error is not None:
             pareto_lines.append(scatter2)
             pareto_labels.append(scatter2.get_label())
 
@@ -630,10 +626,10 @@ def plot_results(
 def build_all(tmp_dir, logs_dir, prefix):
     generate_example_cpp(tmp_dir, prefix)
     generate_example_logged_cpp(tmp_dir, prefix)
-    generate_example_baseline_cpp(tmp_dir, prefix)
+    # generate_example_baseline_cpp(tmp_dir, prefix)
     compile_example_exe(tmp_dir, prefix)
     compile_example_logged_exe(tmp_dir, prefix)
-    compile_example_baseline_exe(tmp_dir, prefix)
+    # compile_example_baseline_exe(tmp_dir, prefix)
     generate_example_txt(tmp_dir, prefix)
     fpoptflags = []
     for flag in FPOPTFLAGS_BASE:
@@ -654,11 +650,12 @@ def measure_baseline_runtime(tmp_dir, prefix, num_runs=NUM_RUNS):
 def benchmark(tmp_dir, logs_dir, prefix, plots_dir):
     costs = parse_critical_comp_costs(tmp_dir, prefix)
 
-    baseline_runtime = measure_baseline_runtime(tmp_dir, prefix, NUM_RUNS)
-    print(f"Baseline average runtime: {baseline_runtime:.6f} seconds")
+    # baseline_runtime = measure_baseline_runtime(tmp_dir, prefix, NUM_RUNS)
+    # print(f"{prefix[:-1]} baseline average runtime: {baseline_runtime:.6f} seconds")
 
-    avg_runtime_example = measure_runtime(tmp_dir, prefix, "example.exe", NUM_RUNS)
-    adjusted_runtime_example = avg_runtime_example - baseline_runtime
+    original_avg_runtime = measure_runtime(tmp_dir, prefix, "example.exe", NUM_RUNS)
+    # original_runtime = original_avg_runtime - baseline_runtime
+    original_runtime = original_avg_runtime
 
     generate_example_values(tmp_dir, prefix)
 
@@ -668,7 +665,7 @@ def benchmark(tmp_dir, logs_dir, prefix, plots_dir):
     example_binary = "example.exe"
     rel_errs_example = get_avg_rel_error(tmp_dir, prefix, golden_values_file, [example_binary])
     rel_err_example = rel_errs_example[example_binary]
-    print(f"Average Rel Error for example.exe: {rel_err_example}")
+    print(f"Average Rel Error for {prefix}example.exe: {rel_err_example}")
 
     budgets = []
     runtimes = []
@@ -693,10 +690,10 @@ def benchmark(tmp_dir, logs_dir, prefix, plots_dir):
 
         avg_runtime = measure_runtime(tmp_dir, prefix, output_binary, NUM_RUNS)
 
-        adjusted_runtime = avg_runtime - baseline_runtime
+        # avg_runtime -= baseline_runtime
 
         budgets.append(cost)
-        runtimes.append(adjusted_runtime)
+        runtimes.append(avg_runtime)
 
         generate_values(tmp_dir, prefix, output_binary)
         optimized_binaries.append(output_binary)
@@ -711,8 +708,8 @@ def benchmark(tmp_dir, logs_dir, prefix, plots_dir):
         "budgets": budgets,
         "runtimes": runtimes,
         "errors": errors,
-        "example_adjusted_runtime": adjusted_runtime_example,
-        "example_rel_err": rel_err_example,
+        "original_runtime": original_runtime,
+        "original_error": rel_err_example,
     }
     data_file = os.path.join(tmp_dir, f"{prefix}benchmark_data.pkl")
     with open(data_file, "wb") as f:
@@ -725,8 +722,8 @@ def benchmark(tmp_dir, logs_dir, prefix, plots_dir):
         budgets,
         runtimes,
         errors,
-        example_adjusted_runtime=adjusted_runtime_example,
-        example_rel_err=rel_err_example,
+        original_runtime=original_runtime,
+        original_error=rel_err_example,
     )
 
 
@@ -743,8 +740,8 @@ def plot_from_data(tmp_dir, plots_dir, prefix, output_format="png"):
         data["budgets"],
         data["runtimes"],
         data["errors"],
-        example_adjusted_runtime=data["example_adjusted_runtime"],
-        example_rel_err=data["example_rel_err"],
+        original_runtime=data["original_runtime"],
+        original_error=data["original_error"],
         output_format=output_format,
     )
 
@@ -771,20 +768,20 @@ def analyze_all_data(tmp_dir, thresholds=None):
     if thresholds is None:
         thresholds = [0, 1e-10, 1e-9, 1e-8, 1e-6, 1e-4, 1e-2, 1e-1, 0.2, 0.3, 0.4, 0.5, 0.9, 1]
 
-    max_accuracy_improvements = {}  # per benchmark
-    runtime_ratios_per_threshold = {threshold: [] for threshold in thresholds}
+    max_accuracy_improvements = {}  # Per benchmark
+    min_runtime_ratios = {threshold: {} for threshold in thresholds}
 
     for prefix, data in data_list:
         budgets = data["budgets"]
         runtimes = data["runtimes"]
         errors = data["errors"]
-        example_adjusted_runtime = data["example_adjusted_runtime"]
-        example_rel_err = data["example_rel_err"]
+        original_runtime = data["original_runtime"]
+        original_error = data["original_error"]
 
-        if example_rel_err is None or example_rel_err <= 0:
+        if original_error is None or original_error <= 0:
             example_digits = None
         else:
-            example_digits = -math.log2(example_rel_err / 100)
+            example_digits = -math.log2(original_error / 100)
 
         digits_list = []
         for err in errors:
@@ -802,29 +799,31 @@ def analyze_all_data(tmp_dir, thresholds=None):
             else:
                 accuracy_improvements.append(None)
 
+        # Find the maximum accuracy improvement for this benchmark
         max_improvement = None
         for improvement in accuracy_improvements:
-            if improvement is not None:
-                if improvement <= 0:
-                    continue
+            if improvement is not None and improvement > 0:
                 if max_improvement is None or improvement > max_improvement:
                     max_improvement = improvement
 
-        if max_improvement is None:
-            max_accuracy_improvements[prefix] = 0.0
-        else:
-            max_accuracy_improvements[prefix] = max_improvement
+        max_accuracy_improvements[prefix] = max_improvement or 0.0
 
-        for err, runtime in zip(errors, runtimes):
-            if err is not None and runtime is not None:
-                for threshold in thresholds:
-                    if err <= threshold * 100:
-                        runtime_ratio = runtime / example_adjusted_runtime
-                        runtime_ratios_per_threshold[threshold].append(runtime_ratio)  # Problematic!
+        # For each threshold, find the minimum runtime ratio for this benchmark
+        for threshold in thresholds:
+            min_ratio = None
+            for err, runtime in zip(errors, runtimes):
+                if err is not None and runtime is not None and err <= threshold * 100:
+                    print(f"Threshold: {threshold}, Error: {err}, Runtime: {runtime}")
+                    runtime_ratio = runtime / original_runtime
+                    if min_ratio is None or runtime_ratio < min_ratio:
+                        min_ratio = runtime_ratio
+            if min_ratio is not None:
+                min_runtime_ratios[threshold][prefix] = min_ratio
 
+    # Now compute the geometric mean of minimum runtime ratios per threshold
     overall_runtime_improvements = {}
     for threshold in thresholds:
-        ratios = runtime_ratios_per_threshold[threshold]
+        ratios = min_runtime_ratios[threshold].values()
         if ratios:
             log_sum = sum(math.log(ratio) for ratio in ratios)
             geo_mean_ratio = math.exp(log_sum / len(ratios))
@@ -833,43 +832,31 @@ def analyze_all_data(tmp_dir, thresholds=None):
         else:
             overall_runtime_improvements[threshold] = None
 
+    # Print maximum accuracy improvements per benchmark
     print("Maximum accuracy improvements (in number of bits) per benchmark:")
     for prefix in prefixes:
         improvement = max_accuracy_improvements.get(prefix)
-        if improvement is not None:
+        if improvement:
             print(f"{prefix}: {improvement:.2f} bits")
         else:
             print(f"{prefix}: No improvement")
 
     improvements = list(max_accuracy_improvements.values())
 
-    if not improvements:
-        print("\nNo accuracy improvements available to compute geometric mean.")
+    # Compute geometric mean of maximum accuracy improvements
+    positive_improvements = [impr for impr in improvements if impr > 0]
+
+    if not positive_improvements:
+        print("\nNo positive accuracy improvements available to compute geometric mean.")
     else:
         try:
-            log_sum = sum(math.log1p(impr) for impr in improvements)
-            geo_mean = math.expm1(log_sum / len(improvements))
-            print(f"\nAdjusted Geometric mean of maximum accuracy improvements: {geo_mean:.2f} bits")
+            log_sum = sum(math.log(impr) for impr in positive_improvements)
+            geo_mean = math.exp(log_sum / len(positive_improvements))
+            print(f"\nGeometric mean of maximum accuracy improvements: {geo_mean:.2f} bits")
         except ValueError as e:
             print(f"\nError in computing geometric mean: {e}")
 
-        positive_improvements = [impr for impr in improvements if impr > 0]
-        print(positive_improvements)
-
-        if not positive_improvements:
-            print(
-                "Geometric mean of maximum accuracy improvements (excluding zeros): No positive improvements available."
-            )
-        else:
-            try:
-                log_sum_excluding = sum(math.log(impr) for impr in positive_improvements)
-                geo_mean_excluding = math.exp(log_sum_excluding / len(positive_improvements))
-                print(
-                    f"Geometric mean of maximum accuracy improvements (excluding zeros): {geo_mean_excluding:.2f} bits"
-                )
-            except ValueError as e:
-                print(f"Error in computing geometric mean (excluding zeros): {e}")
-
+    # Print overall runtime improvements per threshold
     print("\nGeometric average percentage of runtime improvements while allowing some level of relative error:")
     for threshold in thresholds:
         percentage_improvement = overall_runtime_improvements[threshold]
