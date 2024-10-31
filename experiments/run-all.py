@@ -80,7 +80,11 @@ def process_function_task(task):
     try:
         subprocess.check_call(["python3", "run.py", "--prefix", prefix])
     except subprocess.CalledProcessError as e:
-        print(f"Error running run.py for function {func_name} in base {base_name}")
+        print(f"Error running run.py for function {func_name} in base {base_name}. Retrying with --disable-preopt.")
+        try:
+            subprocess.check_call(["python3", "run.py", "--prefix", prefix, "--disable-preopt"])
+        except subprocess.CalledProcessError as e:
+            print(f"Error running run.py with --disable-preopt for function {func_name} in base {base_name}")
 
 
 def main():

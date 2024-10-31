@@ -105,7 +105,7 @@ def create_driver_function(functions, num_samples_per_func):
                     f"WARNING: Bounds not found for {param_name} in function {func_name}, manually specify the bounds."
                 )
             dist_name = f"{func_name}_{param_name}_dist"
-            driver_code.append(f"    std::uniform_real_distribution<double> {dist_name}({min_val}, {max_val});")
+            driver_code.append(f"    std::uniform_real_distribution<{return_type}> {dist_name}({min_val}, {max_val});")
     driver_code.append("")
 
     driver_code.append("    double sum = 0.;")

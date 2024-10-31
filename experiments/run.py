@@ -41,32 +41,6 @@ CXXFLAGS = [
     "-fuse-ld=lld",
 ]
 
-FPOPTFLAGS_BASE = [
-    "-mllvm",
-    "--enzyme-enable-fpopt",
-    "-mllvm",
-    "--enzyme-print-herbie",
-    "-mllvm",
-    "--enzyme-print-fpopt",
-    "-mllvm",
-    "--fpopt-log-path=example.txt",
-    "-mllvm",
-    "--fpopt-target-func-regex=example",
-    "-mllvm",
-    "--fpopt-enable-solver",
-    "-mllvm",
-    "--fpopt-enable-pt",
-    "-mllvm",
-    "--fpopt-comp-cost-budget=0",
-    "-mllvm",
-    "--fpopt-num-samples=1000",
-    "-mllvm",
-    "--fpopt-cost-model-path=../microbm/cm.csv",
-    # "-mllvm",
-    # "--herbie-disable-regime",
-    # "-mllvm",
-    # "--herbie-disable-taylor"
-]
 
 SRC = "example.c"
 LOGGER = "fp-logger.cpp"
@@ -881,7 +855,38 @@ def main():
     parser.add_argument("--plot-only", action="store_true", help="Plot results from existing data")
     parser.add_argument("--output-format", type=str, default="png", help="Output format for plots (e.g., png, pdf)")
     parser.add_argument("--analytics", action="store_true", help="Run analytics on saved data")
+    parser.add_argument("--disable-preopt", action="store_true", help="Disable Enzyme preoptimization")
     args = parser.parse_args()
+
+    global FPOPTFLAGS_BASE  # Ensure global scope
+    FPOPTFLAGS_BASE = [
+        "-mllvm",
+        "--enzyme-enable-fpopt",
+        "-mllvm",
+        "--enzyme-print-herbie",
+        "-mllvm",
+        "--enzyme-print-fpopt",
+        "-mllvm",
+        "--fpopt-log-path=example.txt",
+        "-mllvm",
+        "--fpopt-target-func-regex=example",
+        "-mllvm",
+        "--fpopt-enable-solver",
+        "-mllvm",
+        "--fpopt-enable-pt",
+        "-mllvm",
+        "--fpopt-comp-cost-budget=0",
+        "-mllvm",
+        "--fpopt-num-samples=1000",
+        "-mllvm",
+        "--fpopt-cost-model-path=../microbm/cm.csv",
+        # "-mllvm",
+        # "--herbie-disable-regime",
+        # "-mllvm",
+        # "--herbie-disable-taylor"
+    ]
+    if args.disable_preopt:
+        FPOPTFLAGS_BASE.extend(["-mllvm", "--enzyme-preopt=0"])
 
     prefix = args.prefix
     if not prefix.endswith("-"):
