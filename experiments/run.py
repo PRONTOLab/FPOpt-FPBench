@@ -47,6 +47,7 @@ LOGGER = "fp-logger.cpp"
 EXE = ["example.exe", "example-logged.exe", "example-fpopt.exe"]
 NUM_RUNS = 100
 DRIVER_NUM_SAMPLES = 10000000
+LOG_NUM_SAMPLES = 10000
 MAX_TESTED_COSTS = 20
 
 
@@ -104,7 +105,7 @@ def generate_example_logged_cpp(tmp_dir, prefix):
     src_prefixed = os.path.join(tmp_dir, f"{prefix}{SRC}")
     dest_prefixed = os.path.join(tmp_dir, f"{prefix}example-logged.cpp")
     run_command(
-        ["python3", script, src_prefixed, dest_prefixed, "example", str(DRIVER_NUM_SAMPLES)],
+        ["python3", script, src_prefixed, dest_prefixed, "example", str(LOG_NUM_SAMPLES)],
         f"Generating example-logged.cpp from {SRC}",
     )
     if not os.path.exists(dest_prefixed):
@@ -886,7 +887,7 @@ def main():
         # "--herbie-disable-taylor"
     ]
     if args.disable_preopt:
-        FPOPTFLAGS_BASE.extend(["-mllvm", "--enzyme-preopt=0"])
+        FPOPTFLAGS_BASE.extend(["-mllvm", "--enzyme-preopt=0"])  
 
     prefix = args.prefix
     if not prefix.endswith("-"):
