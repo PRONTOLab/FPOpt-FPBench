@@ -16,6 +16,7 @@ import pickle
 
 from tqdm import tqdm, trange
 from matplotlib import rcParams
+from concurrent.futures import ProcessPoolExecutor, as_completed
 
 HOME = "/home/sbrantq"
 ENZYME_PATH = os.path.join(HOME, "sync/Enzyme/build/Enzyme/ClangEnzyme-15.so")
@@ -41,14 +42,40 @@ CXXFLAGS = [
     "-fuse-ld=lld",
 ]
 
+FPOPTFLAGS_BASE = [
+    "-mllvm",
+    "--enzyme-enable-fpopt",
+    "-mllvm",
+    "--enzyme-print-herbie",
+    "-mllvm",
+    "--enzyme-print-fpopt",
+    "-mllvm",
+    "--fpopt-log-path=example.txt",
+    "-mllvm",
+    "--fpopt-target-func-regex=example",
+    "-mllvm",
+    "--fpopt-enable-solver",
+    "-mllvm",
+    "--fpopt-enable-pt",
+    "-mllvm",
+    "--fpopt-comp-cost-budget=0",
+    "-mllvm",
+    "--fpopt-num-samples=1000",
+    "-mllvm",
+    "--fpopt-cost-model-path=../microbm/cm.csv",
+    # "-mllvm",
+    # "--herbie-disable-regime",
+    # "-mllvm",
+    # "--herbie-disable-taylor"
+]
 
 SRC = "example.c"
 LOGGER = "fp-logger.cpp"
 EXE = ["example.exe", "example-logged.exe", "example-fpopt.exe"]
-NUM_RUNS = 100
+NUM_RUNS = 10
 DRIVER_NUM_SAMPLES = 10000000
 LOG_NUM_SAMPLES = 10000
-MAX_TESTED_COSTS = 20
+MAX_TESTED_COSTS = 999
 
 
 def run_command(command, description, capture_output=False, output_file=None, verbose=True):
@@ -622,14 +649,36 @@ def measure_baseline_runtime(tmp_dir, prefix, num_runs=NUM_RUNS):
     return avg_runtime
 
 
-def benchmark(tmp_dir, logs_dir, prefix, plots_dir):
+def process_cost(args):
+    cost, tmp_dir, prefix = args
+
+    print(f"\n=== Processing computation cost budget: {cost} ===")
+    fpoptflags = []
+    for flag in FPOPTFLAGS_BASE:
+        if flag.startswith("--fpopt-comp-cost-budget="):
+            fpoptflags.append(f"--fpopt-comp-cost-budget={cost}")
+        elif flag.startswith("--fpopt-log-path="):
+            fpoptflags.append(f"--fpopt-log-path=tmp/{prefix}example.txt")
+        else:
+            fpoptflags.append(flag)
+
+    output_binary = f"example-fpopt-{cost}.exe"
+
+    compile_example_fpopt_exe(tmp_dir, prefix, fpoptflags, output=output_binary, verbose=False)
+
+    avg_runtime = measure_runtime(tmp_dir, prefix, output_binary, NUM_RUNS)
+
+    # generate values
+    generate_values(tmp_dir, prefix, output_binary)
+
+    # Return the necessary data
+    return cost, avg_runtime, output_binary
+
+
+def benchmark(tmp_dir, logs_dir, prefix, plots_dir, num_parallel=1):
     costs = parse_critical_comp_costs(tmp_dir, prefix)
 
-    # baseline_runtime = measure_baseline_runtime(tmp_dir, prefix, NUM_RUNS)
-    # print(f"{prefix[:-1]} baseline average runtime: {baseline_runtime:.6f} seconds")
-
     original_avg_runtime = measure_runtime(tmp_dir, prefix, "example.exe", NUM_RUNS)
-    # original_runtime = original_avg_runtime - baseline_runtime
     original_runtime = original_avg_runtime
 
     generate_example_values(tmp_dir, prefix)
@@ -648,30 +697,28 @@ def benchmark(tmp_dir, logs_dir, prefix, plots_dir):
 
     optimized_binaries = []
 
-    for cost in costs:
-        print(f"\n=== Processing computation cost budget: {cost} ===")
-        fpoptflags = []
-        for flag in FPOPTFLAGS_BASE:
-            if flag.startswith("--fpopt-comp-cost-budget="):
-                fpoptflags.append(f"--fpopt-comp-cost-budget={cost}")
-            elif flag.startswith("--fpopt-log-path="):
-                fpoptflags.append(f"--fpopt-log-path=tmp/{prefix}example.txt")
-            else:
-                fpoptflags.append(flag)
+    args_list = [(cost, tmp_dir, prefix) for cost in costs]
 
-        output_binary = f"example-fpopt-{cost}.exe"
-
-        compile_example_fpopt_exe(tmp_dir, prefix, fpoptflags, output=output_binary, verbose=False)
-
-        avg_runtime = measure_runtime(tmp_dir, prefix, output_binary, NUM_RUNS)
-
-        # avg_runtime -= baseline_runtime
-
-        budgets.append(cost)
-        runtimes.append(avg_runtime)
-
-        generate_values(tmp_dir, prefix, output_binary)
-        optimized_binaries.append(output_binary)
+    if num_parallel == 1:
+        # Sequential execution
+        for args in args_list:
+            cost, avg_runtime, output_binary = process_cost(args)
+            budgets.append(cost)
+            runtimes.append(avg_runtime)
+            optimized_binaries.append(output_binary)
+    else:
+        # Parallel execution
+        with ProcessPoolExecutor(max_workers=num_parallel) as executor:
+            future_to_cost = {executor.submit(process_cost, args): args[0] for args in args_list}
+            for future in as_completed(future_to_cost):
+                cost = future_to_cost[future]
+                try:
+                    cost_result, avg_runtime, output_binary = future.result()
+                    budgets.append(cost_result)
+                    runtimes.append(avg_runtime)
+                    optimized_binaries.append(output_binary)
+                except Exception as exc:
+                    print(f"Cost {cost} generated an exception: {exc}")
 
     errors_dict = get_avg_rel_error(tmp_dir, prefix, golden_values_file, optimized_binaries)
     errors = []
@@ -753,18 +800,22 @@ def analyze_all_data(tmp_dir, thresholds=None):
         original_runtime = data["original_runtime"]
         original_error = data["original_error"]
 
-        if original_error is None or original_error <= 0:
-            example_digits = None
+        if original_error == 0:
+            example_digits = 17
+            print(f"Original program of {prefix} has zero relative error! Using 17 digits of accuracy.")
         else:
-            example_digits = -math.log2(original_error / 100)
+            example_digits = min(-math.log10(original_error / 100), 17)
+            print(f"Original program of {prefix} has {example_digits:.2f} digits of accuracy.")
 
         digits_list = []
         for err in errors:
-            if err is None or err <= 0:
-                digits_list.append(None)
+            if err == 0:
+                digits_list.append(17)
+                print(f"Optimized program of {prefix} has zero relative error! Using 17 digits of accuracy.")
             else:
-                digits = -math.log2(err / 100)
+                digits = min(-math.log10(err / 100), 17)
                 digits_list.append(digits)
+                print(f"Optimized program of {prefix} has {digits:.2f} digits of accuracy.")
 
         accuracy_improvements = []
         for digits in digits_list:
@@ -788,7 +839,7 @@ def analyze_all_data(tmp_dir, thresholds=None):
             min_ratio = None
             for err, runtime in zip(errors, runtimes):
                 if err is not None and runtime is not None and err <= threshold * 100:
-                    print(f"Threshold: {threshold}, Error: {err}, Runtime: {runtime}")
+                    # print(f"Threshold: {threshold}, Error: {err}, Runtime: {runtime}")
                     runtime_ratio = runtime / original_runtime
                     if min_ratio is None or runtime_ratio < min_ratio:
                         min_ratio = runtime_ratio
@@ -800,7 +851,7 @@ def analyze_all_data(tmp_dir, thresholds=None):
     for threshold in thresholds:
         ratios = min_runtime_ratios[threshold].values()
         if ratios:
-            log_sum = sum(math.log(ratio) for ratio in ratios)
+            log_sum = sum(math.log(ratio) if ratio < 1 else 0 for ratio in ratios)
             geo_mean_ratio = math.exp(log_sum / len(ratios))
             percentage_improvement = (1 - geo_mean_ratio) * 100
             overall_runtime_improvements[threshold] = percentage_improvement
@@ -812,7 +863,7 @@ def analyze_all_data(tmp_dir, thresholds=None):
     for prefix in prefixes:
         improvement = max_accuracy_improvements.get(prefix)
         if improvement:
-            print(f"{prefix}: {improvement:.2f} bits")
+            print(f"{prefix}: {improvement:.2f} decimal digits")
         else:
             print(f"{prefix}: No improvement")
 
@@ -827,7 +878,7 @@ def analyze_all_data(tmp_dir, thresholds=None):
         try:
             log_sum = sum(math.log(impr) for impr in positive_improvements)
             geo_mean = math.exp(log_sum / len(positive_improvements))
-            print(f"\nGeometric mean of maximum accuracy improvements: {geo_mean:.2f} bits")
+            print(f"\nGeometric mean of maximum accuracy improvements: {geo_mean:.2f} decimal digits")
         except ValueError as e:
             print(f"\nError in computing geometric mean: {e}")
 
@@ -841,9 +892,9 @@ def analyze_all_data(tmp_dir, thresholds=None):
             print(f"Allowed relative error ≤ {threshold}: No data")
 
 
-def build_with_benchmark(tmp_dir, logs_dir, plots_dir, prefix):
+def build_with_benchmark(tmp_dir, logs_dir, plots_dir, prefix, num_parallel=1):
     build_all(tmp_dir, logs_dir, prefix)
-    benchmark(tmp_dir, logs_dir, prefix, plots_dir)
+    benchmark(tmp_dir, logs_dir, prefix, plots_dir, num_parallel)
 
 
 def main():
@@ -857,37 +908,12 @@ def main():
     parser.add_argument("--output-format", type=str, default="png", help="Output format for plots (e.g., png, pdf)")
     parser.add_argument("--analytics", action="store_true", help="Run analytics on saved data")
     parser.add_argument("--disable-preopt", action="store_true", help="Disable Enzyme preoptimization")
+    parser.add_argument("--num-parallel", type=int, default=1, help="Number of parallel processes to use (default: 1)")
     args = parser.parse_args()
 
-    global FPOPTFLAGS_BASE  # Ensure global scope
-    FPOPTFLAGS_BASE = [
-        "-mllvm",
-        "--enzyme-enable-fpopt",
-        "-mllvm",
-        "--enzyme-print-herbie",
-        "-mllvm",
-        "--enzyme-print-fpopt",
-        "-mllvm",
-        "--fpopt-log-path=example.txt",
-        "-mllvm",
-        "--fpopt-target-func-regex=example",
-        "-mllvm",
-        "--fpopt-enable-solver",
-        "-mllvm",
-        "--fpopt-enable-pt",
-        "-mllvm",
-        "--fpopt-comp-cost-budget=0",
-        "-mllvm",
-        "--fpopt-num-samples=1000",
-        "-mllvm",
-        "--fpopt-cost-model-path=../microbm/cm.csv",
-        # "-mllvm",
-        # "--herbie-disable-regime",
-        # "-mllvm",
-        # "--herbie-disable-taylor"
-    ]
+    global FPOPTFLAGS_BASE
     if args.disable_preopt:
-        FPOPTFLAGS_BASE.extend(["-mllvm", "--enzyme-preopt=0"])  
+        FPOPTFLAGS_BASE.extend(["-mllvm", "--enzyme-preopt=0"])
 
     prefix = args.prefix
     if not prefix.endswith("-"):
@@ -908,7 +934,7 @@ def main():
         build_all(tmp_dir, logs_dir, prefix)
         sys.exit(0)
     elif args.benchmark:
-        benchmark(tmp_dir, logs_dir, prefix, plots_dir)
+        benchmark(tmp_dir, logs_dir, prefix, plots_dir, num_parallel=args.num_parallel)
         sys.exit(0)
     elif args.plot_only:
         plot_from_data(tmp_dir, plots_dir, prefix, output_format=args.output_format)
@@ -917,10 +943,10 @@ def main():
         analyze_all_data(tmp_dir)
         sys.exit(0)
     elif args.all:
-        build_with_benchmark(tmp_dir, logs_dir, plots_dir, prefix)
+        build_with_benchmark(tmp_dir, logs_dir, plots_dir, prefix, num_parallel=args.num_parallel)
         sys.exit(0)
     else:
-        build_with_benchmark(tmp_dir, logs_dir, plots_dir, prefix)
+        build_with_benchmark(tmp_dir, logs_dir, plots_dir, prefix, num_parallel=args.num_parallel)
 
 
 if __name__ == "__main__":
