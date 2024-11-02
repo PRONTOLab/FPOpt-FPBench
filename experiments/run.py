@@ -75,7 +75,7 @@ EXE = ["example.exe", "example-logged.exe", "example-fpopt.exe"]
 NUM_RUNS = 10
 DRIVER_NUM_SAMPLES = 10000000
 LOG_NUM_SAMPLES = 10000
-MAX_TESTED_COSTS = 999
+MAX_TESTED_COSTS = 20
 
 
 def run_command(command, description, capture_output=False, output_file=None, verbose=True):
@@ -781,6 +781,7 @@ def analyze_all_data(tmp_dir, thresholds=None):
             prefixes.append(prefix)
             data_list.append((prefix, data))
 
+    print("Number of tested FPBench functions: ", len(data_list))
     if not data_list:
         print("No benchmark data files found in the tmp directory.")
         return
@@ -793,6 +794,7 @@ def analyze_all_data(tmp_dir, thresholds=None):
     max_accuracy_improvements = {}  # Per benchmark
     min_runtime_ratios = {threshold: {} for threshold in thresholds}
 
+    original_digits = []
     for prefix, data in data_list:
         budgets = data["budgets"]
         runtimes = data["runtimes"]
@@ -802,20 +804,22 @@ def analyze_all_data(tmp_dir, thresholds=None):
 
         if original_error == 0:
             example_digits = 17
-            print(f"Original program of {prefix} has zero relative error! Using 17 digits of accuracy.")
+            # print(f"Original program of {prefix} has zero relative error! Using 17 digits of accuracy.")
         else:
             example_digits = min(-math.log10(original_error / 100), 17)
-            print(f"Original program of {prefix} has {example_digits:.2f} digits of accuracy.")
+            # print(f"Original program of {prefix} has {example_digits:.2f} digits of accuracy.")
+
+        original_digits.append(example_digits)
 
         digits_list = []
         for err in errors:
             if err == 0:
                 digits_list.append(17)
-                print(f"Optimized program of {prefix} has zero relative error! Using 17 digits of accuracy.")
+                # print(f"Optimized program of {prefix} has zero relative error! Using 17 digits of accuracy.")
             else:
                 digits = min(-math.log10(err / 100), 17)
                 digits_list.append(digits)
-                print(f"Optimized program of {prefix} has {digits:.2f} digits of accuracy.")
+                # print(f"Optimized program of {prefix} has {digits:.2f} digits of accuracy.")
 
         accuracy_improvements = []
         for digits in digits_list:
@@ -846,17 +850,30 @@ def analyze_all_data(tmp_dir, thresholds=None):
             if min_ratio is not None:
                 min_runtime_ratios[threshold][prefix] = min_ratio
 
+    log_sum = sum(math.log1p(digits) for digits in original_digits)
+    geo_mean = math.expm1(log_sum / len(original_digits))
+    print(f"Original programs have {geo_mean:.2f} decimal digits of accuracy on average.")
+    print(f"Original programs have {max(original_digits):.2f} decimal digits of accuracy at most.")
+
     # Now compute the geometric mean of minimum runtime ratios per threshold
     overall_runtime_improvements = {}
     for threshold in thresholds:
         ratios = min_runtime_ratios[threshold].values()
+        print(f"\nThreshold: {threshold}, Number of valid runtime ratios: {len(ratios)}")
         if ratios:
-            log_sum = sum(math.log(ratio) if ratio < 1 else 0 for ratio in ratios)
-            geo_mean_ratio = math.exp(log_sum / len(ratios))
+            log_sum = sum(math.log1p(min(1, ratio)) for ratio in ratios)
+            geo_mean_ratio = math.expm1(log_sum / len(ratios))
             percentage_improvement = (1 - geo_mean_ratio) * 100
             overall_runtime_improvements[threshold] = percentage_improvement
         else:
             overall_runtime_improvements[threshold] = None
+
+    # ratios1 = min_runtime_ratios[1e-06].keys()
+    # ratios2 = min_runtime_ratios[1e-04].keys()
+
+    # for i in ratios2:
+    #     if i not in ratios1:
+    #         print(i)
 
     # Print maximum accuracy improvements per benchmark
     print("Maximum accuracy improvements (in number of bits) per benchmark:")
