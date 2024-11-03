@@ -849,6 +849,7 @@ def analyze_all_data(tmp_dir, thresholds=None):
                         min_ratio = runtime_ratio
             if min_ratio is not None:
                 min_runtime_ratios[threshold][prefix] = min_ratio
+                # print(f"Threshold: {threshold}, maximum runtime improvement for {prefix}: {(1 - min_ratio) * 100:.2f}%")
 
     log_sum = sum(math.log1p(digits) for digits in original_digits)
     geo_mean = math.expm1(log_sum / len(original_digits))
@@ -859,7 +860,7 @@ def analyze_all_data(tmp_dir, thresholds=None):
     overall_runtime_improvements = {}
     for threshold in thresholds:
         ratios = min_runtime_ratios[threshold].values()
-        print(f"\nThreshold: {threshold}, Number of valid runtime ratios: {len(ratios)}")
+        # print(f"\nThreshold: {threshold}, Number of valid runtime ratios: {len(ratios)}")
         if ratios:
             log_sum = sum(math.log1p(min(1, ratio)) for ratio in ratios)
             geo_mean_ratio = math.expm1(log_sum / len(ratios))
