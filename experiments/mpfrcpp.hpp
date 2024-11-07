@@ -221,7 +221,11 @@ mpfrcpp<MPFRPREC> fabs(const mpfrcpp<MPFRPREC> &g1) {
 template <unsigned int MPFRPREC>
 mpfrcpp<MPFRPREC> pow(const mpfrcpp<MPFRPREC> &g1, double expd) {
   mpfrcpp<MPFRPREC> res;
-  mpfr_pow_d(res.value, g1.value, expd, MPFR_RNDN);
+  mpfr_t exp_mpfr;
+  mpfr_init2(exp_mpfr, MPFRPREC);
+  mpfr_set_d(exp_mpfr, expd, MPFR_RNDN);
+  mpfr_pow(res.value, g1.value, exp_mpfr, MPFR_RNDN);
+  mpfr_clear(exp_mpfr);
   return res;
 }
 

@@ -75,24 +75,27 @@ EXE = ["example.exe", "example-logged.exe", "example-fpopt.exe"]
 NUM_RUNS = 10
 DRIVER_NUM_SAMPLES = 10000000
 LOG_NUM_SAMPLES = 10000
-MAX_TESTED_COSTS = 20
+MAX_TESTED_COSTS = 999
 
 
-def run_command(command, description, capture_output=False, output_file=None, verbose=True):
+def run_command(command, description, capture_output=False, output_file=None, verbose=True, timeout=None):
     print(f"=== {description} ===")
     print("Running:", " ".join(command))
     try:
         if capture_output and output_file:
             with open(output_file, "w") as f:
-                subprocess.check_call(command, stdout=f, stderr=subprocess.STDOUT)
+                subprocess.check_call(command, stdout=f, stderr=subprocess.STDOUT, timeout=timeout)
         elif capture_output:
-            result = subprocess.run(command, capture_output=True, text=True, check=True)
+            result = subprocess.run(command, capture_output=True, text=True, check=True, timeout=timeout)
             return result.stdout
         else:
             if verbose:
-                subprocess.check_call(command)
+                subprocess.check_call(command, timeout=timeout)
             else:
-                subprocess.check_call(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                subprocess.check_call(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        print(f"Command '{' '.join(command)}' timed out after {timeout} seconds.")
+        return
     except subprocess.CalledProcessError as e:
         print(f"Error during: {description}")
         if capture_output and output_file:
@@ -186,7 +189,13 @@ def generate_example_txt(tmp_dir, prefix):
     with open(output, "w") as f:
         print(f"=== Running {exe} to generate {output} ===")
         try:
-            subprocess.check_call([exe], stdout=f)
+            subprocess.check_call([exe], stdout=f, timeout=300)
+        except subprocess.TimeoutExpired:
+            print(f"Execution of {exe} timed out.")
+            if os.path.exists(exe):
+                os.remove(exe)
+                print(f"Removed executable {exe} due to timeout.")
+            return
         except subprocess.CalledProcessError as e:
             print(f"Error running {exe}")
             sys.exit(e.returncode)
@@ -253,7 +262,7 @@ def measure_runtime(tmp_dir, prefix, executable, num_runs=NUM_RUNS):
     exe_path = os.path.join(tmp_dir, f"{prefix}{executable}")
     for i in trange(1, num_runs + 1):
         try:
-            result = subprocess.run([exe_path], capture_output=True, text=True, check=True)
+            result = subprocess.run([exe_path], capture_output=True, text=True, check=True, timeout=300)
             output = result.stdout
             match = re.search(r"Total runtime: ([\d\.]+) seconds", output)
             if match:
@@ -262,12 +271,22 @@ def measure_runtime(tmp_dir, prefix, executable, num_runs=NUM_RUNS):
             else:
                 print(f"Could not parse runtime from output on run {i}")
                 sys.exit(1)
+        except subprocess.TimeoutExpired:
+            print(f"Execution of {exe_path} timed out on run {i}")
+            if os.path.exists(exe_path):
+                os.remove(exe_path)
+                print(f"Removed executable {exe_path} due to timeout.")
+            return None
         except subprocess.CalledProcessError as e:
             print(f"Error running {exe_path} on run {i}")
             sys.exit(e.returncode)
-    average_runtime = mean(runtimes)
-    print(f"Average runtime for {prefix}{executable}: {average_runtime:.6f} seconds")
-    return average_runtime
+    if runtimes:
+        average_runtime = mean(runtimes)
+        print(f"Average runtime for {prefix}{executable}: {average_runtime:.6f} seconds")
+        return average_runtime
+    else:
+        print(f"No successful runs for {prefix}{executable}")
+        return None
 
 
 def get_values_file_path(tmp_dir, prefix, binary_name):
@@ -279,14 +298,14 @@ def generate_example_values(tmp_dir, prefix):
     exe = os.path.join(tmp_dir, f"{prefix}{binary_name}")
     output_values_file = get_values_file_path(tmp_dir, prefix, binary_name)
     cmd = [exe, "--output-path", output_values_file]
-    run_command(cmd, f"Generating function values from {binary_name}", verbose=False)
+    run_command(cmd, f"Generating function values from {binary_name}", verbose=False, timeout=300)
 
 
 def generate_values(tmp_dir, prefix, binary_name):
     exe = os.path.join(tmp_dir, f"{prefix}{binary_name}")
     values_file = get_values_file_path(tmp_dir, prefix, binary_name)
     cmd = [exe, "--output-path", values_file]
-    run_command(cmd, f"Generating function values from {binary_name}", verbose=False)
+    run_command(cmd, f"Generating function values from {binary_name}", verbose=False, timeout=300)
 
 
 def compile_golden_exe(tmp_dir, prefix):
@@ -319,7 +338,11 @@ def generate_golden_values(tmp_dir, prefix):
 
         exe = os.path.join(tmp_dir, f"{prefix}golden.exe")
         cmd = [exe, "--output-path", output_values_file]
-        run_command(cmd, f"Generating golden values with PREC={cur_prec}", verbose=False)
+        run_command(cmd, f"Generating golden values with PREC={cur_prec}", verbose=False, timeout=300)
+
+        if not os.path.exists(output_values_file):
+            print(f"Failed to generate golden values at PREC={cur_prec} due to timeout.")
+            return  # Assume golden values do not exist
 
         with open(output_values_file, "r") as f:
             output = f.read()
@@ -343,8 +366,9 @@ def get_avg_rel_error(tmp_dir, prefix, golden_values_file, binaries):
     for binary in binaries:
         values_file = get_values_file_path(tmp_dir, prefix, binary)
         if not os.path.exists(values_file):
-            print(f"Values file {values_file} does not exist. Generating it now.")
-            generate_values(tmp_dir, prefix, binary)
+            print(f"Values file {values_file} does not exist. Skipping error calculation for {binary}.")
+            errors[binary] = None
+            continue
         with open(values_file, "r") as f:
             values = [float(line.strip()) for line in f]
         if len(values) != len(golden_values):
@@ -392,6 +416,16 @@ def plot_results(
     output_format="png",
 ):
     print(f"=== Plotting results to {output_format.upper()} file ===")
+
+    # Filter out entries where runtimes or errors are None
+    data = list(zip(budgets, runtimes, errors))
+    filtered_data = [(b, r, e) for b, r, e in data if r is not None and e is not None]
+
+    if not filtered_data:
+        print("No valid data to plot.")
+        return
+
+    budgets, runtimes, errors = zip(*filtered_data)
 
     rcParams["font.size"] = 20
     rcParams["axes.titlesize"] = 24
@@ -667,6 +701,9 @@ def process_cost(args):
     compile_example_fpopt_exe(tmp_dir, prefix, fpoptflags, output=output_binary, verbose=False)
 
     avg_runtime = measure_runtime(tmp_dir, prefix, output_binary, NUM_RUNS)
+    if avg_runtime is None:
+        print(f"Skipping cost {cost} due to runtime measurement failure.")
+        return cost, None, None  # Return None to indicate failure
 
     # generate values
     generate_values(tmp_dir, prefix, output_binary)
@@ -680,6 +717,10 @@ def benchmark(tmp_dir, logs_dir, prefix, plots_dir, num_parallel=1):
 
     original_avg_runtime = measure_runtime(tmp_dir, prefix, "example.exe", NUM_RUNS)
     original_runtime = original_avg_runtime
+
+    if original_runtime is None:
+        print("Original binary timed out. Proceeding as if it doesn't exist.")
+        return
 
     generate_example_values(tmp_dir, prefix)
 
@@ -700,23 +741,23 @@ def benchmark(tmp_dir, logs_dir, prefix, plots_dir, num_parallel=1):
     args_list = [(cost, tmp_dir, prefix) for cost in costs]
 
     if num_parallel == 1:
-        # Sequential execution
         for args in args_list:
             cost, avg_runtime, output_binary = process_cost(args)
-            budgets.append(cost)
-            runtimes.append(avg_runtime)
-            optimized_binaries.append(output_binary)
+            if avg_runtime is not None:
+                budgets.append(cost)
+                runtimes.append(avg_runtime)
+                optimized_binaries.append(output_binary)
     else:
-        # Parallel execution
         with ProcessPoolExecutor(max_workers=num_parallel) as executor:
             future_to_cost = {executor.submit(process_cost, args): args[0] for args in args_list}
             for future in as_completed(future_to_cost):
                 cost = future_to_cost[future]
                 try:
                     cost_result, avg_runtime, output_binary = future.result()
-                    budgets.append(cost_result)
-                    runtimes.append(avg_runtime)
-                    optimized_binaries.append(output_binary)
+                    if avg_runtime is not None:
+                        budgets.append(cost_result)
+                        runtimes.append(avg_runtime)
+                        optimized_binaries.append(output_binary)
                 except Exception as exc:
                     print(f"Cost {cost} generated an exception: {exc}")
 
@@ -816,10 +857,12 @@ def analyze_all_data(tmp_dir, thresholds=None):
             if err == 0:
                 digits_list.append(17)
                 # print(f"Optimized program of {prefix} has zero relative error! Using 17 digits of accuracy.")
-            else:
+            elif err is not None:
                 digits = min(-math.log10(err / 100), 17)
                 digits_list.append(digits)
                 # print(f"Optimized program of {prefix} has {digits:.2f} digits of accuracy.")
+            else:
+                digits_list.append(None)
 
         accuracy_improvements = []
         for digits in digits_list:

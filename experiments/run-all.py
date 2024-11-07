@@ -141,8 +141,12 @@ def main():
             tasks.append(task)
 
     if tasks:
-        with multiprocessing.Pool(num_parallel_tasks) as pool:
-            pool.map(process_function_task, tasks)
+        if num_parallel_tasks == 1:
+            for task in tasks:
+                process_function_task(task)
+        else:
+            with multiprocessing.Pool(num_parallel_tasks) as pool:
+                pool.map(process_function_task, tasks)
     else:
         print("No functions to process.")
 
