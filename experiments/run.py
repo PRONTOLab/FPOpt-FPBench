@@ -700,16 +700,9 @@ def process_cost(args):
 
     compile_example_fpopt_exe(tmp_dir, prefix, fpoptflags, output=output_binary, verbose=False)
 
-    avg_runtime = measure_runtime(tmp_dir, prefix, output_binary, NUM_RUNS)
-    if avg_runtime is None:
-        print(f"Skipping cost {cost} due to runtime measurement failure.")
-        return cost, None, None  # Return None to indicate failure
-
-    # generate values
     generate_values(tmp_dir, prefix, output_binary)
 
-    # Return the necessary data
-    return cost, avg_runtime, output_binary
+    return cost, output_binary
 
 
 def benchmark(tmp_dir, logs_dir, prefix, plots_dir, num_parallel=1):
@@ -742,24 +735,29 @@ def benchmark(tmp_dir, logs_dir, prefix, plots_dir, num_parallel=1):
 
     if num_parallel == 1:
         for args in args_list:
-            cost, avg_runtime, output_binary = process_cost(args)
-            if avg_runtime is not None:
-                budgets.append(cost)
-                runtimes.append(avg_runtime)
-                optimized_binaries.append(output_binary)
+            cost, output_binary = process_cost(args)
+            budgets.append(cost)
+            optimized_binaries.append(output_binary)
     else:
         with ProcessPoolExecutor(max_workers=num_parallel) as executor:
             future_to_cost = {executor.submit(process_cost, args): args[0] for args in args_list}
             for future in as_completed(future_to_cost):
                 cost = future_to_cost[future]
                 try:
-                    cost_result, avg_runtime, output_binary = future.result()
-                    if avg_runtime is not None:
-                        budgets.append(cost_result)
-                        runtimes.append(avg_runtime)
-                        optimized_binaries.append(output_binary)
+                    cost_result, output_binary = future.result()
+                    budgets.append(cost_result)
+                    optimized_binaries.append(output_binary)
                 except Exception as exc:
                     print(f"Cost {cost} generated an exception: {exc}")
+
+    # Now measure runtimes serially
+    for cost, output_binary in zip(budgets, optimized_binaries):
+        avg_runtime = measure_runtime(tmp_dir, prefix, output_binary, NUM_RUNS)
+        if avg_runtime is not None:
+            runtimes.append(avg_runtime)
+        else:
+            print(f"Skipping cost {cost} due to runtime measurement failure.")
+            runtimes.append(None)
 
     errors_dict = get_avg_rel_error(tmp_dir, prefix, golden_values_file, optimized_binaries)
     errors = []
@@ -969,7 +967,7 @@ def main():
     parser.add_argument("--output-format", type=str, default="png", help="Output format for plots (e.g., png, pdf)")
     parser.add_argument("--analytics", action="store_true", help="Run analytics on saved data")
     parser.add_argument("--disable-preopt", action="store_true", help="Disable Enzyme preoptimization")
-    parser.add_argument("--num-parallel", type=int, default=1, help="Number of parallel processes to use (default: 1)")
+    parser.add_argument("--num-parallel", type=int, default=32, help="Number of parallel processes to use (default: 1)")
     args = parser.parse_args()
 
     global FPOPTFLAGS_BASE

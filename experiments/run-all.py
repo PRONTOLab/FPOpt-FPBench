@@ -89,7 +89,7 @@ def process_function_task(task):
 
 def main():
     parser = argparse.ArgumentParser(description="Process functions from .fpcore files.")
-    parser.add_argument("-j", type=int, help="Number of parallel tasks", default=multiprocessing.cpu_count())
+    parser.add_argument("-j", type=int, help="Number of parallel tasks", default=1)
     parser.add_argument("--regen", action="store_true", help="Force regeneration of .c files")
     args = parser.parse_args()
 
