@@ -189,7 +189,7 @@ def generate_example_txt(tmp_dir, prefix):
     with open(output, "w") as f:
         print(f"=== Running {exe} to generate {output} ===")
         try:
-            subprocess.check_call([exe], stdout=f, timeout=300)
+            subprocess.check_call([exe], stdout=f)
         except subprocess.TimeoutExpired:
             print(f"Execution of {exe} timed out.")
             if os.path.exists(exe):
@@ -338,7 +338,7 @@ def generate_golden_values(tmp_dir, prefix):
 
         exe = os.path.join(tmp_dir, f"{prefix}golden.exe")
         cmd = [exe, "--output-path", output_values_file]
-        run_command(cmd, f"Generating golden values with PREC={cur_prec}", verbose=False, timeout=300)
+        run_command(cmd, f"Generating golden values with PREC={cur_prec}", verbose=False)
 
         if not os.path.exists(output_values_file):
             print(f"Failed to generate golden values at PREC={cur_prec} due to timeout.")
