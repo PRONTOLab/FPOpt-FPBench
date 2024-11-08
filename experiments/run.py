@@ -60,6 +60,8 @@ FPOPTFLAGS_BASE = [
     "-mllvm",
     "--fpopt-comp-cost-budget=0",
     "-mllvm",
+    "--herbie-num-threads=8",
+    "-mllvm",
     "--fpopt-num-samples=1000",
     "-mllvm",
     "--fpopt-cost-model-path=../microbm/cm.csv",
@@ -967,7 +969,7 @@ def main():
     parser.add_argument("--output-format", type=str, default="png", help="Output format for plots (e.g., png, pdf)")
     parser.add_argument("--analytics", action="store_true", help="Run analytics on saved data")
     parser.add_argument("--disable-preopt", action="store_true", help="Disable Enzyme preoptimization")
-    parser.add_argument("--num-parallel", type=int, default=32, help="Number of parallel processes to use (default: 1)")
+    parser.add_argument("--num-parallel", type=int, default=16, help="Number of parallel processes to use (default: 1)")
     args = parser.parse_args()
 
     global FPOPTFLAGS_BASE
