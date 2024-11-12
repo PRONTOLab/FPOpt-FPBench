@@ -62,13 +62,13 @@ FPOPTFLAGS_BASE = [
     "-mllvm",
     "--herbie-num-threads=8",
     "-mllvm",
-    "--fpopt-num-samples=1000",
+    "--herbie-timeout=1000",
+    "-mllvm",
+    "--fpopt-num-samples=1024",
     "-mllvm",
     "--fpopt-cost-model-path=../microbm/cm.csv",
-    # "-mllvm",
-    # "--herbie-disable-regime",
-    # "-mllvm",
-    # "--herbie-disable-taylor"
+    "-mllvm",
+    "-fpopt-cache-path=cache",
 ]
 
 SRC = "example.c"
@@ -459,7 +459,8 @@ def plot_results(
         if original_error is not None:
             line4 = ax2.axhline(y=original_error, color=color_error, linestyle="--", label="Original Relative Error")
         ax2.tick_params(axis="y", labelcolor=color_error)
-        ax2.set_yscale("log")
+        ax2.set_yscale("symlog", linthresh=1e-14)
+        ax2.set_ylim(bottom=0)
 
         ax1.set_title(f"Computation Cost Budget vs Runtime\nand Relative Error ({prefix[:-1]})")
         ax1.grid(True)
@@ -960,6 +961,13 @@ def build_with_benchmark(tmp_dir, logs_dir, plots_dir, prefix, num_parallel=1):
     benchmark(tmp_dir, logs_dir, prefix, plots_dir, num_parallel)
 
 
+def remove_cache_dir():
+    cache_dir = "cache"
+    if os.path.exists(cache_dir):
+        shutil.rmtree(cache_dir)
+        print("=== Removed existing cache directory ===")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Run the example C code with prefix handling.")
     parser.add_argument("--prefix", type=str, required=True, help="Prefix for intermediate files (e.g., rosa-ex23-)")
@@ -971,7 +979,9 @@ def main():
     parser.add_argument("--output-format", type=str, default="png", help="Output format for plots (e.g., png, pdf)")
     parser.add_argument("--analytics", action="store_true", help="Run analytics on saved data")
     parser.add_argument("--disable-preopt", action="store_true", help="Disable Enzyme preoptimization")
-    parser.add_argument("--num-parallel", type=int, default=16, help="Number of parallel processes to use (default: 1)")
+    parser.add_argument(
+        "--num-parallel", type=int, default=16, help="Number of parallel processes to use (default: 16)"
+    )
     args = parser.parse_args()
 
     global FPOPTFLAGS_BASE
@@ -989,6 +999,8 @@ def main():
     os.makedirs(tmp_dir, exist_ok=True)
     os.makedirs(logs_dir, exist_ok=True)
     os.makedirs(plots_dir, exist_ok=True)
+
+    remove_cache_dir()
 
     if args.clean:
         clean(tmp_dir, logs_dir, plots_dir)
