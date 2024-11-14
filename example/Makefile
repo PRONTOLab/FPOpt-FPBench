@@ -4,8 +4,8 @@ LLVM_PATH ?= $(HOME)/llvms/llvm15/build/bin
 CXX = $(LLVM_PATH)/clang++
 
 CXXFLAGS = -O3 -Wall \
-		   -I$(HOME)/include \
-           -L$(HOME)/lib \
+		   -I$(HOME)/tools/include \
+           -L$(HOME)/tools/lib \
            -I /usr/include/c++/11 \
            -I /usr/include/x86_64-linux-gnu/c++/11 \
            -L /usr/lib/gcc/x86_64-linux-gnu/11 \
@@ -25,6 +25,8 @@ FPOPTFLAGS += -mllvm --enzyme-enable-fpopt \
 		   -mllvm --fpopt-num-samples=1000 \
 		   -mllvm --fpopt-show-table \
 		   -mllvm --fpopt-cost-model-path=../microbm/cm.csv
+
+ABLATIONFLAGS += -mllvm --fpopt-extra-ifconv
 
 SRC ?= example.c
 LOGGER ?= fp-logger.cpp
@@ -56,7 +58,7 @@ example.txt: example-logged.exe
 	./example-logged.exe > $@
 
 example-fpopt.exe: example.cpp example.txt
-	$(CXX) example.cpp $(CXXFLAGS) $(FPOPTFLAGS) -o $@
+	$(CXX) example.cpp $(CXXFLAGS) $(ABLATIONFLAGS) $(FPOPTFLAGS) -o $@
 
 clean:
 	rm -f $(EXE) example-logged.cpp example.cpp example-golden.cpp example.txt
