@@ -9,3 +9,11 @@ fpbench-compiled/
 *.driver-enzyme.cpp
 *.a.out
 *.o
+
+experiments/plots/*
+experiments/out
+experiments/cache/*
+experiments/logs/*
+experiments/tmp/*
+experiments/exported/*
+

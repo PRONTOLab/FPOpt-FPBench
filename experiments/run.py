@@ -18,13 +18,16 @@ from tqdm import tqdm, trange
 from matplotlib import rcParams
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
-HOME = "/home/sbrantq"
-ENZYME_PATH = os.path.join(HOME, "sync/Enzyme/build/Enzyme/ClangEnzyme-15.so")
-LLVM_PATH = os.path.join(HOME, "llvms/llvm15/build/bin")
+HOME = "/home/vimarsh6739"
+ENZYME_PATH = "/home/vimarsh6739/higher-order/Enzyme/enzyme/build/Enzyme/ClangEnzyme-15.so"
+# ENZYME_PATH = os.path.join(HOME, "sync/Enzyme/build/Enzyme/ClangEnzyme-15.so")
+# LLVM_PATH = os.path.join(HOME, "llvms/llvm15/build/bin")
+LLVM_PATH = "/home/vimarsh6739/llvm-project/build/bin"
 CXX = os.path.join(LLVM_PATH, "clang++")
 
 CXXFLAGS = [
     "-O3",
+    "-I" + os.getcwd(),
     "-I" + os.path.join(HOME, "include"),
     "-L" + os.path.join(HOME, "lib"),
     "-I/usr/include/c++/11",

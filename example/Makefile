@@ -1,4 +1,4 @@
-HOME ?= /home/sbrantq
+HOME ?= /home/vimarsh6739/
 ENZYME_PATH ?= $(HOME)/sync/Enzyme/build/Enzyme/ClangEnzyme-15.so
 LLVM_PATH ?= $(HOME)/llvms/llvm15/build/bin
 CXX = $(LLVM_PATH)/clang++
