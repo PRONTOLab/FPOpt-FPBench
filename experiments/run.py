@@ -22,14 +22,14 @@ HOME = "/home/vimarsh6739"
 ENZYME_PATH = "/home/vimarsh6739/higher-order/Enzyme/enzyme/build/Enzyme/ClangEnzyme-15.so"
 # ENZYME_PATH = os.path.join(HOME, "sync/Enzyme/build/Enzyme/ClangEnzyme-15.so")
 # LLVM_PATH = os.path.join(HOME, "llvms/llvm15/build/bin")
-LLVM_PATH = "/home/vimarsh6739/llvm-project/build/bin"
+LLVM_PATH = "/home/vimarsh6739/tools/build/bin"
 CXX = os.path.join(LLVM_PATH, "clang++")
 
 CXXFLAGS = [
-    "-O3",
+    "-O0",
     "-I" + os.getcwd(),
-    "-I" + os.path.join(HOME, "include"),
-    "-L" + os.path.join(HOME, "lib"),
+    "-I" + os.path.join(HOME, "tools/include"),
+    "-L" + os.path.join(HOME, "tools/lib"),
     "-I/usr/include/c++/11",
     "-I/usr/include/x86_64-linux-gnu/c++/11",
     "-L/usr/lib/gcc/x86_64-linux-gnu/11",
@@ -40,9 +40,7 @@ CXXFLAGS = [
     "-Xclang",
     ENZYME_PATH,
     "-lmpfr",
-    "-ffast-math",
-    "-fno-finite-math-only",
-    "-fuse-ld=lld",
+    "-fuse-ld=lld"
 ]
 
 FPOPTFLAGS_BASE = [
@@ -72,6 +70,18 @@ FPOPTFLAGS_BASE = [
     "--fpopt-cost-model-path=../microbm/cm.csv",
     "-mllvm",
     "-fpopt-cache-path=cache",
+]
+
+ABLATION_FLAGS = ["-mllvm", 
+                  "--fpopt-extra-pre-cse",
+                  "-mllvm",
+                  "--fpopt-extra-memopt",
+                  "-mllvm",
+                  "--fpopt-extra-pre-reassoc"
+                  "-mllvm",
+                  "--fpopt-extra-ifconv",
+                  "-mllvm",
+                  "--fpopt-extra-post-cse"
 ]
 
 SRC = "example.c"
@@ -674,6 +684,9 @@ def build_all(tmp_dir, logs_dir, prefix):
     # compile_example_baseline_exe(tmp_dir, prefix)
     generate_example_txt(tmp_dir, prefix)
     fpoptflags = []
+    
+
+
     for flag in FPOPTFLAGS_BASE:
         if flag.startswith("--fpopt-log-path="):
             fpoptflags.append(f"--fpopt-log-path=tmp/{prefix}example.txt")
