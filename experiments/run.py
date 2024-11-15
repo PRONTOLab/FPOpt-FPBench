@@ -20,27 +20,18 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 
 HOME = "/home/vimarsh6739"
 ENZYME_PATH = "/home/vimarsh6739/higher-order/Enzyme/enzyme/build/Enzyme/ClangEnzyme-15.so"
-# ENZYME_PATH = os.path.join(HOME, "sync/Enzyme/build/Enzyme/ClangEnzyme-15.so")
-# LLVM_PATH = os.path.join(HOME, "llvms/llvm15/build/bin")
-LLVM_PATH = "/home/vimarsh6739/tools/build/bin"
+LLVM_PATH = "/home/vimarsh6739/tools/bin"
 CXX = os.path.join(LLVM_PATH, "clang++")
 
 CXXFLAGS = [
-    "-O0",
-    "-I" + os.getcwd(),
-    "-I" + os.path.join(HOME, "tools/include"),
-    "-L" + os.path.join(HOME, "tools/lib"),
+    "-O3",
     "-I/usr/include/c++/11",
     "-I/usr/include/x86_64-linux-gnu/c++/11",
     "-L/usr/lib/gcc/x86_64-linux-gnu/11",
     "-fno-exceptions",
     f"-fpass-plugin={ENZYME_PATH}",
-    "-Xclang",
-    "-load",
-    "-Xclang",
-    ENZYME_PATH,
-    "-lmpfr",
-    "-fuse-ld=lld"
+    "-Xclang", "-load", "-Xclang", ENZYME_PATH,
+    "-lmpfr", "-fuse-ld=lld"
 ]
 
 FPOPTFLAGS_BASE = [
@@ -79,10 +70,7 @@ ABLATION_FLAGS = ["-mllvm",
                   "-mllvm",
                   "--fpopt-extra-pre-reassoc"
                   "-mllvm",
-                  "--fpopt-extra-ifconv",
-                  "-mllvm",
-                  "--fpopt-extra-post-cse"
-]
+                  "--fpopt-extra-ifconv"]
 
 SRC = "example.c"
 LOGGER = "fp-logger.cpp"
@@ -675,24 +663,60 @@ def plot_results(
         print(f"Plot saved to {plot_filename}")
 
 
-def build_all(tmp_dir, logs_dir, prefix):
+def build_all(prefix, ablateType, tmp_dir="tmp", logs_dir="logs"):
+    #python
     generate_example_cpp(tmp_dir, prefix)
+    #python
     generate_example_logged_cpp(tmp_dir, prefix)
     # generate_example_baseline_cpp(tmp_dir, prefix)
+    
+    #all cpp files have to be regenerated
+    #cpp 
     compile_example_exe(tmp_dir, prefix)
+    #cpp
     compile_example_logged_exe(tmp_dir, prefix)
     # compile_example_baseline_exe(tmp_dir, prefix)
     generate_example_txt(tmp_dir, prefix)
-    fpoptflags = []
     
+    # start building exes depending on ablation type
+    if (ablateType < 5):
+        
+        # every example.txt will be different(as instructions have to match)
+        fpoptflags = []
+        for flag in FPOPTFLAGS_BASE:
+            if flag.startswith("--fpopt-log-path="):
+                fpoptflags.append(f"--fpopt-log-path=tmp/{ablateType}-{prefix}example.txt")
+            else:
+                fpoptflags.append(flag)
+        
+        # add ablation flags we need to fpoptflags
+        fpoptflags.extend(ABLATION_FLAGS[(ablateType-1)*2:ablateType*2])
+        compile_example_fpopt_exe(tmp_dir,prefix,fpoptflags,output=f"{ablateType}-example-fpopt.exe")
+        
+    elif (ablateType == 5):
+        log_prefix = f"all-{prefix}"
+        # build  1, 12,123,1234
+        for i in range(1,5):
+            # 1, 12,...
+            fpoptflags = []
+            log_prefix = f"{i}-" + log_prefix
 
+            for flag in FPOPTFLAGS_BASE:
+                if flag.startswith("--fpopt-log-path="):
+                    fpoptflags.append(f"--fpopt-log-path=tmp/{log_prefix}example.txt")
+                else:
+                    fpoptflags.append(flag)
+    else:
+        print("wtf")
 
-    for flag in FPOPTFLAGS_BASE:
-        if flag.startswith("--fpopt-log-path="):
-            fpoptflags.append(f"--fpopt-log-path=tmp/{prefix}example.txt")
-        else:
-            fpoptflags.append(flag)
-    compile_example_fpopt_exe(tmp_dir, prefix, fpoptflags, output="example-fpopt.exe")
+    #     fpoptflags = []
+    #
+    #     for flag in FPOPTFLAGS_BASE:
+    #         if flag.startswith("--fpopt-log-path="):
+    #             fpoptflags.append(f"--fpopt-log-path=tmp/{prefix}example.txt")
+    #         else:
+    #             fpoptflags.append(flag)
+    # compile_example_fpopt_exe(tmp_dir, prefix, fpoptflags, output="example-fpopt.exe")
     print("=== Initial build process completed successfully ===")
 
 
@@ -724,7 +748,7 @@ def process_cost(args):
     return cost, output_binary
 
 
-def benchmark(tmp_dir, logs_dir, prefix, plots_dir, num_parallel=1):
+def benchmark(prefix, ablateType, tmp_dir, logs_dir, plots_dir, num_parallel=1):
     costs = parse_critical_comp_costs(tmp_dir, prefix)
 
     original_avg_runtime = measure_runtime(tmp_dir, prefix, "example.exe", NUM_RUNS)
@@ -971,10 +995,11 @@ def analyze_all_data(tmp_dir, thresholds=None):
         else:
             print(f"Allowed relative error ≤ {threshold}: No data")
 
-
-def build_with_benchmark(tmp_dir, logs_dir, plots_dir, prefix, num_parallel=1):
-    build_all(tmp_dir, logs_dir, prefix)
-    benchmark(tmp_dir, logs_dir, prefix, plots_dir, num_parallel)
+ # tmp,logs,plots (hardcoded)
+def build_with_benchmark(prefix, ablateType, tmp_dir="tmp", logs_dir="logs", plots_dir="plots", num_parallel=1):
+    build_all(prefix,ablateType,tmp_dir,logs_dir)
+    # build_all(tmp_dir, logs_dir, prefix)
+    benchmark(prefix, ablateType, tmp_dir, logs_dir, plots_dir, num_parallel)
 
 
 def remove_cache_dir():
@@ -998,11 +1023,16 @@ def main():
     parser.add_argument(
         "--num-parallel", type=int, default=16, help="Number of parallel processes to use (default: 16)"
     )
+    
+    parser.add_argument(
+        "--ablation", type=int, default=5, help="Decide which ablation to run (default: 5=all,1 = cse, 2 = memopt, 3 = reassoc, 4 = if-conversion)"
+    )
     args = parser.parse_args()
 
     global FPOPTFLAGS_BASE
     if args.disable_preopt:
         FPOPTFLAGS_BASE.extend(["-mllvm", "--enzyme-preopt=0"])
+        FPOPTFLAGS_BASE.extend(["-mllvm", "--enzyme-disable-preopt"])
 
     prefix = args.prefix
     if not prefix.endswith("-"):
@@ -1022,10 +1052,10 @@ def main():
         clean(tmp_dir, logs_dir, plots_dir)
         sys.exit(0)
     elif args.build:
-        build_all(tmp_dir, logs_dir, prefix)
+        build_all(prefix, args.ablation)
         sys.exit(0)
     elif args.benchmark:
-        benchmark(tmp_dir, logs_dir, prefix, plots_dir, num_parallel=args.num_parallel)
+        benchmark(prefix, args.ablation, tmp_dir, logs_dir, plots_dir, num_parallel=args.num_parallel)
         sys.exit(0)
     elif args.plot_only:
         plot_from_data(tmp_dir, plots_dir, prefix, output_format=args.output_format)
@@ -1034,10 +1064,12 @@ def main():
         analyze_all_data(tmp_dir)
         sys.exit(0)
     elif args.all:
-        build_with_benchmark(tmp_dir, logs_dir, plots_dir, prefix, num_parallel=args.num_parallel)
-        sys.exit(0)
+        build_with_benchmark(prefix,args.ablation,num_parallel=args.num_parallel)
+        # build_with_benchmark(tmp_dir, logs_dir, plots_dir, prefix, num_parallel=args.num_parallel)
+        # sys.exit(0)
     else:
-        build_with_benchmark(tmp_dir, logs_dir, plots_dir, prefix, num_parallel=args.num_parallel)
+        # build_with_benchmark(tmp_dir, logs_dir, plots_dir, prefix, num_parallel=args.num_parallel)
+        build_with_benchmark(prefix,args.ablation,num_parallel=args.num_parallel)
 
 
 if __name__ == "__main__":
