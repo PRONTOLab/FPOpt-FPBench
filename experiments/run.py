@@ -64,10 +64,10 @@ FPOPTFLAGS_BASE = [
     "-fpopt-cache-path=cache",
 ]
 
-ABLATION_FLAGS = ["-mllvm", 
-                  "--fpopt-extra-pre-cse",
-                  "-mllvm",
+ABLATION_FLAGS = ["-mllvm",
                   "--fpopt-extra-memopt",
+                  "-mllvm",
+                  "--fpopt-extra-pre-cse",
                   "-mllvm",
                   "--fpopt-extra-pre-reassoc",
                   "-mllvm",
