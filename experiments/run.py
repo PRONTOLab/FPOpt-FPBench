@@ -161,31 +161,49 @@ def generate_example_baseline_cpp(tmp_dir, prefix):
         sys.exit(1)
     print(f"Generated {dest_prefixed} successfully.")
 
+def get_ablation_flags(abrange):
+    #NO preoptimizations(disable prePath)!
+    EXTRAFLAGS = ["-mllvm","--enzyme-disable-preopt"]
+    # FPOPTFLAGS_BASE.extend(["-mllvm", "--enzyme-disable-preopt"])
+    if abrange < 5:
+        EXTRAFLAGS = ABLATION_FLAGS[(abrange-1)*2:abrange*2]
+    elif abrange == 12:
+        EXTRAFLAGS =ABLATION_FLAGS[0:4]
+    elif abrange == 123:
+        EXTRAFLAGS = ABLATION_FLAGS[0:6]
+    elif abrange == 1234:
+        EXTRAFLAGS = ABLATION_FLAGS[0:8]
+    
+    return EXTRAFLAGS
 
-def compile_example_exe(tmp_dir, prefix):
+def compile_example_exe(tmp_dir, prefix, abrange):
     source = os.path.join(tmp_dir, f"{prefix}example.cpp")
-    output = os.path.join(tmp_dir, f"{prefix}example.exe")
-    cmd = [CXX, source] + CXXFLAGS + ["-o", output]
+    output = os.path.join(tmp_dir, f"{abrange}-{prefix}example.exe")
+    extraflags = get_ablation_flags(abrange)
+    cmd = [CXX, source] + CXXFLAGS + extraflags + ["-o", output]
     run_command(cmd, f"Compiling {output}")
 
 
-def compile_example_logged_exe(tmp_dir, prefix):
+def compile_example_logged_exe(tmp_dir, prefix,abrange):
     source = os.path.join(tmp_dir, f"{prefix}example-logged.cpp")
-    output = os.path.join(tmp_dir, f"{prefix}example-logged.exe")
-    cmd = [CXX, source, LOGGER] + CXXFLAGS + ["-o", output]
+    output = os.path.join(tmp_dir, f"{abrange}-{prefix}example-logged.exe")
+    extraflags = get_ablation_flags(abrange)
+    cmd = [CXX, source, LOGGER] + CXXFLAGS + extraflags + ["-o", output]
     run_command(cmd, f"Compiling {output}")
 
 
-def compile_example_baseline_exe(tmp_dir, prefix):
+def compile_example_baseline_exe(tmp_dir, prefix,abrange):
     source = os.path.join(tmp_dir, f"{prefix}example-baseline.cpp")
     output = os.path.join(tmp_dir, f"{prefix}example-baseline.exe")
+     
     cmd = [CXX, source] + CXXFLAGS + ["-o", output]
     run_command(cmd, f"Compiling {output}")
 
 
-def generate_example_txt(tmp_dir, prefix):
-    exe = os.path.join(tmp_dir, f"{prefix}example-logged.exe")
-    output = os.path.join(tmp_dir, f"{prefix}example.txt")
+def generate_example_txt(tmp_dir, prefix,ablateType):
+    #every ablation type has it's own example.txt
+    exe = os.path.join(tmp_dir, f"{ablateType}-{prefix}example-logged.exe")
+    output = os.path.join(tmp_dir, f"{ablateType}-{prefix}example.txt")
     if not os.path.exists(exe):
         print(f"Executable {exe} not found. Cannot generate {output}.")
         sys.exit(1)
@@ -204,11 +222,12 @@ def generate_example_txt(tmp_dir, prefix):
             sys.exit(e.returncode)
 
 
-def compile_example_fpopt_exe(tmp_dir, prefix, fpoptflags, output="example-fpopt.exe", verbose=True):
+def compile_example_fpopt_exe(ablateType,tmp_dir, prefix, fpoptflags, output="example-fpopt.exe", verbose=True):
     source = os.path.join(tmp_dir, f"{prefix}example.cpp")
-    output_path = os.path.join(tmp_dir, f"{prefix}{output}")
-    cmd = [CXX, source] + CXXFLAGS + fpoptflags + ["-o", output_path]
-    log_path = os.path.join("logs", f"{prefix}compile_fpopt.log")
+    output_path = os.path.join(tmp_dir, f"{ablateType}-{prefix}{output}")
+    extraflags = get_ablation_flags(ablateType)
+    cmd = [CXX, source] + CXXFLAGS + fpoptflags + extraflags+  ["-o", output_path]
+    log_path = os.path.join("logs", f"{ablateType}-{prefix}compile_fpopt.log")
     if output == "example-fpopt.exe":
         run_command(
             cmd,
@@ -311,7 +330,7 @@ def generate_values(tmp_dir, prefix, binary_name):
     run_command(cmd, f"Generating function values from {binary_name}", verbose=False, timeout=300)
 
 
-def compile_golden_exe(tmp_dir, prefix):
+def compile_golden_exe(tmp_dir, prefix,abrange):
     source = os.path.join(tmp_dir, f"{prefix}golden.cpp")
     output = os.path.join(tmp_dir, f"{prefix}golden.exe")
     cmd = [CXX, source] + CXXFLAGS + ["-o", output]
@@ -668,18 +687,17 @@ def build_all(prefix, ablateType, tmp_dir="tmp", logs_dir="logs"):
     generate_example_cpp(tmp_dir, prefix)
     #python
     generate_example_logged_cpp(tmp_dir, prefix)
-    # generate_example_baseline_cpp(tmp_dir, prefix)
-    
-    #all cpp files have to be regenerated
-    #cpp 
-    compile_example_exe(tmp_dir, prefix)
-    #cpp
-    compile_example_logged_exe(tmp_dir, prefix)
+    # generate_example_baseline_cpp(tmp_dir, prefix) 
+    # compile_example_exe(tmp_dir, prefix)
+    # compile_example_logged_exe(tmp_dir, prefix)
     # compile_example_baseline_exe(tmp_dir, prefix)
-    generate_example_txt(tmp_dir, prefix)
+    # generate_example_txt(tmp_dir, prefix)
     
     # start building exes depending on ablation type
     if (ablateType < 5):
+        compile_example_exe(tmp_dir,prefix,ablateType) 
+        compile_example_logged_exe(tmp_dir,prefix,ablateType)
+        generate_example_txt(tmp_dir,prefix,ablateType)
         
         # every example.txt will be different(as instructions have to match)
         fpoptflags = []
@@ -689,9 +707,7 @@ def build_all(prefix, ablateType, tmp_dir="tmp", logs_dir="logs"):
             else:
                 fpoptflags.append(flag)
         
-        # add ablation flags we need to fpoptflags
-        fpoptflags.extend(ABLATION_FLAGS[(ablateType-1)*2:ablateType*2])
-        compile_example_fpopt_exe(tmp_dir,prefix,fpoptflags,output=f"{ablateType}-example-fpopt.exe")
+        compile_example_fpopt_exe(ablateType,tmp_dir,prefix,fpoptflags,output=f"example-fpopt.exe")
         
     elif (ablateType == 5):
         log_prefix = f"all-{prefix}"
@@ -1032,7 +1048,7 @@ def main():
     global FPOPTFLAGS_BASE
     if args.disable_preopt:
         FPOPTFLAGS_BASE.extend(["-mllvm", "--enzyme-preopt=0"])
-        FPOPTFLAGS_BASE.extend(["-mllvm", "--enzyme-disable-preopt"])
+        # FPOPTFLAGS_BASE.extend(["-mllvm", "--enzyme-disable-preopt"])
 
     prefix = args.prefix
     if not prefix.endswith("-"):
