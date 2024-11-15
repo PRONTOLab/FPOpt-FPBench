@@ -25,6 +25,7 @@ CXX = os.path.join(LLVM_PATH, "clang++")
 
 CXXFLAGS = [
     "-O3",
+    "-I" + os.getcwd(),
     "-I/usr/include/c++/11",
     "-I/usr/include/x86_64-linux-gnu/c++/11",
     "-L/usr/lib/gcc/x86_64-linux-gnu/11",
@@ -1046,7 +1047,7 @@ def main():
     if args.disable_preopt:
         FPOPTFLAGS_BASE.extend(["-mllvm", "--enzyme-preopt=0"])
         # FPOPTFLAGS_BASE.extend(["-mllvm", "--enzyme-disable-preopt"])
-
+    print(args.ablation)
     prefix = args.prefix
     if not prefix.endswith("-"):
         prefix += "-"

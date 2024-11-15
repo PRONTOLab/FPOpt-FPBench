@@ -38,3 +38,5 @@ pow,double,225
 fabs,double,20
 hypot,double,382
 fma,double,74
+fmuladd,double,74
+fmuladd,float,75
