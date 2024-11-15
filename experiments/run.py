@@ -69,7 +69,7 @@ ABLATION_FLAGS = ["-mllvm",
                   "-mllvm",
                   "--fpopt-extra-memopt",
                   "-mllvm",
-                  "--fpopt-extra-pre-reassoc"
+                  "--fpopt-extra-pre-reassoc",
                   "-mllvm",
                   "--fpopt-extra-ifconv"]
 
