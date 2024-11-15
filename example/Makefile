@@ -1,18 +1,16 @@
 HOME ?= /home/vimarsh6739/
-ENZYME_PATH ?= $(HOME)/sync/Enzyme/build/Enzyme/ClangEnzyme-15.so
-LLVM_PATH ?= $(HOME)/llvms/llvm15/build/bin
+ENZYME_PATH ?= $(HOME)/higher-order/Enzyme/enzyme/build/Enzyme/ClangEnzyme-15.so
+LLVM_PATH ?= $(HOME)/tools/bin
 CXX = $(LLVM_PATH)/clang++
 
 CXXFLAGS = -O3 -Wall \
-		   -I$(HOME)/tools/include \
-           -L$(HOME)/tools/lib \
            -I /usr/include/c++/11 \
            -I /usr/include/x86_64-linux-gnu/c++/11 \
            -L /usr/lib/gcc/x86_64-linux-gnu/11 \
            -fno-exceptions \
            -fpass-plugin=$(ENZYME_PATH) \
            -Xclang -load -Xclang $(ENZYME_PATH) \
-           -lmpfr -ffast-math -fno-finite-math-only -fuse-ld=lld
+           -lmpfr -fuse-ld=lld
 
 FPOPTFLAGS += -mllvm --enzyme-enable-fpopt \
 		   -mllvm --enzyme-print-herbie \
@@ -26,7 +24,8 @@ FPOPTFLAGS += -mllvm --enzyme-enable-fpopt \
 		   -mllvm --fpopt-show-table \
 		   -mllvm --fpopt-cost-model-path=../microbm/cm.csv
 
-ABLATIONFLAGS += -mllvm --fpopt-extra-ifconv
+NOPREOPTFLAG += -mllvm --enzyme-disable-preopt
+ABLATIONFLAGS += -mllvm --fpopt-extra-memopt
 
 SRC ?= example.c
 LOGGER ?= fp-logger.cpp
@@ -58,7 +57,10 @@ example.txt: example-logged.exe
 	./example-logged.exe > $@
 
 example-fpopt.exe: example.cpp example.txt
-	$(CXX) example.cpp $(CXXFLAGS) $(ABLATIONFLAGS) $(FPOPTFLAGS) -o $@
+	$(CXX) example.cpp $(CXXFLAGS) $(FPOPTFLAGS) -o $@
+
+example-fpopt-mem.exe: example.cpp example.txt
+	$(CXX) example.cpp $(CXXFLAGS) $(FPOPTFLAGS) $(NOPREOPTFLAG) $(ABLATIONFLAGS) -o $@
 
 clean:
 	rm -f $(EXE) example-logged.cpp example.cpp example-golden.cpp example.txt
