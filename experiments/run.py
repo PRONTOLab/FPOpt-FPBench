@@ -223,12 +223,12 @@ def generate_example_txt(tmp_dir, prefix,ablateType):
             sys.exit(e.returncode)
 
 
-def compile_example_fpopt_exe(ablateType,tmp_dir, prefix, fpoptflags, output="example-fpopt.exe", verbose=True):
+def compile_example_fpopt_exe(ablate_type,tmp_dir, prefix, fpoptflags, output="example-fpopt.exe", verbose=True):
     source = os.path.join(tmp_dir, f"{prefix}example.cpp")
-    output_path = os.path.join(tmp_dir, f"{ablateType}-{prefix}{output}")
-    extraflags = get_ablation_flags(ablateType)
+    output_path = os.path.join(tmp_dir, f"{ablate_type}-{prefix}{output}")
+    extraflags = get_ablation_flags(ablate_type)
     cmd = [CXX, source] + CXXFLAGS + fpoptflags + extraflags+  ["-o", output_path]
-    log_path = os.path.join("logs", f"{ablateType}-{prefix}compile_fpopt.log")
+    log_path = os.path.join("logs", f"{ablate_type}-{prefix}compile_fpopt.log")
     if output == "example-fpopt.exe":
         run_command(
             cmd,
@@ -245,9 +245,9 @@ def compile_example_fpopt_exe(ablateType,tmp_dir, prefix, fpoptflags, output="ex
         )
 
 
-def parse_critical_comp_costs(tmp_dir, prefix, log_path="compile_fpopt.log"):
+def parse_critical_comp_costs(ablateType,tmp_dir, prefix, log_path="compile_fpopt.log"):
     print(f"=== Parsing critical computation costs from {log_path} ===")
-    full_log_path = os.path.join("logs", f"{prefix}{log_path}")
+    full_log_path = os.path.join("logs", f"{ablateType}-{prefix}{log_path}")
     if not os.path.exists(full_log_path):
         print(f"Log file {full_log_path} does not exist.")
         sys.exit(1)
@@ -279,10 +279,10 @@ def parse_critical_comp_costs(tmp_dir, prefix, log_path="compile_fpopt.log"):
     return sampled_costs_sorted
 
 
-def measure_runtime(tmp_dir, prefix, executable, num_runs=NUM_RUNS):
-    print(f"=== Measuring runtime for {executable} ===")
+def measure_runtime(ablate_type,tmp_dir, prefix, executable, num_runs=NUM_RUNS):
+    print(f"=== Measuring runtime for {ablate_type}-{prefix}{executable} ===")
     runtimes = []
-    exe_path = os.path.join(tmp_dir, f"{prefix}{executable}")
+    exe_path = os.path.join(tmp_dir, f"{ablate_type}-{prefix}{executable}")
     for i in trange(1, num_runs + 1):
         try:
             result = subprocess.run([exe_path], capture_output=True, text=True, check=True, timeout=300)
@@ -305,48 +305,49 @@ def measure_runtime(tmp_dir, prefix, executable, num_runs=NUM_RUNS):
             sys.exit(e.returncode)
     if runtimes:
         average_runtime = mean(runtimes)
-        print(f"Average runtime for {prefix}{executable}: {average_runtime:.6f} seconds")
+        print(f"Average runtime for {ablate_type}-{prefix}{executable}: {average_runtime:.6f} seconds")
         return average_runtime
     else:
-        print(f"No successful runs for {prefix}{executable}")
+        print(f"No successful runs for {ablate_type}-{prefix}{executable}")
         return None
 
 
-def get_values_file_path(tmp_dir, prefix, binary_name):
-    return os.path.join(tmp_dir, f"{prefix}{binary_name}-values.txt")
+def get_values_file_path(ablate_type,tmp_dir, prefix, binary_name):
+    return os.path.join(tmp_dir, f"{ablate_type}-{prefix}{binary_name}-values.txt")
 
 
-def generate_example_values(tmp_dir, prefix):
+def generate_example_values(ablate_type,tmp_dir, prefix):
     binary_name = "example.exe"
-    exe = os.path.join(tmp_dir, f"{prefix}{binary_name}")
-    output_values_file = get_values_file_path(tmp_dir, prefix, binary_name)
+    exe = os.path.join(tmp_dir, f"{ablate_type}-{prefix}{binary_name}")
+    output_values_file = get_values_file_path(ablate_type,tmp_dir, prefix, binary_name)
     cmd = [exe, "--output-path", output_values_file]
     run_command(cmd, f"Generating function values from {binary_name}", verbose=False, timeout=300)
 
 
-def generate_values(tmp_dir, prefix, binary_name):
-    exe = os.path.join(tmp_dir, f"{prefix}{binary_name}")
-    values_file = get_values_file_path(tmp_dir, prefix, binary_name)
+def generate_values(ablate_type,tmp_dir, prefix, binary_name):
+    exe = os.path.join(tmp_dir, f"{ablate_type}-{prefix}{binary_name}")
+    values_file = get_values_file_path(ablate_type,tmp_dir, prefix, binary_name)
     cmd = [exe, "--output-path", values_file]
     run_command(cmd, f"Generating function values from {binary_name}", verbose=False, timeout=300)
 
 
-def compile_golden_exe(tmp_dir, prefix,abrange):
-    source = os.path.join(tmp_dir, f"{prefix}golden.cpp")
-    output = os.path.join(tmp_dir, f"{prefix}golden.exe")
-    cmd = [CXX, source] + CXXFLAGS + ["-o", output]
+def compile_golden_exe(tmp_dir, prefix,ablate_type):
+    source = os.path.join(tmp_dir, f"{ablate_type}-{prefix}golden.cpp")
+    output = os.path.join(tmp_dir, f"{ablate_type}-{prefix}golden.exe")
+    extraflags = get_ablation_flags(ablate_type)
+    cmd = [CXX, source] + CXXFLAGS + extraflags + ["-o", output]
     run_command(cmd, f"Compiling {output}")
 
 
-def generate_golden_values(tmp_dir, prefix):
+def generate_golden_values(ablate_type,tmp_dir, prefix):
     script = "fpopt-golden-driver-generator.py"
     src_prefixed = os.path.join(tmp_dir, f"{prefix}{SRC}")
-    dest_prefixed = os.path.join(tmp_dir, f"{prefix}golden.cpp")
+    dest_prefixed = os.path.join(tmp_dir, f"{ablate_type}-{prefix}golden.cpp")
     cur_prec = 128
     max_prec = 4096
     PREC_step = 128
     prev_output = None
-    output_values_file = get_values_file_path(tmp_dir, prefix, "golden.exe")
+    output_values_file = get_values_file_path(ablate_type,tmp_dir, prefix, "golden.exe")
     while cur_prec <= max_prec:
         run_command(
             ["python3", script, src_prefixed, dest_prefixed, str(cur_prec), "example", str(DRIVER_NUM_SAMPLES)],
@@ -357,9 +358,9 @@ def generate_golden_values(tmp_dir, prefix):
             sys.exit(1)
         print(f"Generated {dest_prefixed} successfully.")
 
-        compile_golden_exe(tmp_dir, prefix)
+        compile_golden_exe(tmp_dir, prefix,ablate_type)
 
-        exe = os.path.join(tmp_dir, f"{prefix}golden.exe")
+        exe = os.path.join(tmp_dir, f"{ablate_type}-{prefix}golden.exe")
         cmd = [exe, "--output-path", output_values_file]
         run_command(cmd, f"Generating golden values with PREC={cur_prec}", verbose=False)
 
@@ -381,13 +382,13 @@ def generate_golden_values(tmp_dir, prefix):
         sys.exit(1)
 
 
-def get_avg_rel_error(tmp_dir, prefix, golden_values_file, binaries):
+def get_avg_rel_error(ablate_type,tmp_dir, prefix, golden_values_file, binaries):
     with open(golden_values_file, "r") as f:
         golden_values = [float(line.strip()) for line in f]
-
+    
     errors = {}
     for binary in binaries:
-        values_file = get_values_file_path(tmp_dir, prefix, binary)
+        values_file = get_values_file_path(ablate_type,tmp_dir, prefix, binary)
         if not os.path.exists(values_file):
             print(f"Values file {values_file} does not exist. Skipping error calculation for {binary}.")
             errors[binary] = None
@@ -429,6 +430,7 @@ def get_avg_rel_error(tmp_dir, prefix, golden_values_file, binaries):
 
 
 def plot_results(
+    ablate_type,
     plots_dir,
     prefix,
     budgets,
@@ -575,7 +577,7 @@ def plot_results(
         print(f"Second plot saved to {plot_filename2}")
     else:
         # Existing behavior for non-PDF formats
-        plot_filename = os.path.join(plots_dir, f"runtime_error_plot_{prefix[:-1]}.{output_format}")
+        plot_filename = os.path.join(plots_dir, f"runtime_error_plot_{ablate_type}_{prefix[:-1]}.{output_format}")
 
         fig, (ax1, ax3) = plt.subplots(1, 2, figsize=(20, 8))
 
@@ -741,7 +743,7 @@ def measure_baseline_runtime(tmp_dir, prefix, num_runs=NUM_RUNS):
 
 
 def process_cost(args):
-    cost, tmp_dir, prefix = args
+    cost, ablate_type, tmp_dir, prefix = args
 
     print(f"\n=== Processing computation cost budget: {cost} ===")
     fpoptflags = []
@@ -749,42 +751,42 @@ def process_cost(args):
         if flag.startswith("--fpopt-comp-cost-budget="):
             fpoptflags.append(f"--fpopt-comp-cost-budget={cost}")
         elif flag.startswith("--fpopt-log-path="):
-            fpoptflags.append(f"--fpopt-log-path=tmp/{prefix}example.txt")
+            fpoptflags.append(f"--fpopt-log-path=tmp/{ablate_type}-{prefix}example.txt")
         else:
             fpoptflags.append(flag)
 
     output_binary = f"example-fpopt-{cost}.exe"
 
-    compile_example_fpopt_exe(tmp_dir, prefix, fpoptflags, output=output_binary, verbose=False)
+    compile_example_fpopt_exe(ablate_type,tmp_dir, prefix, fpoptflags, output=output_binary, verbose=False)
 
-    generate_values(tmp_dir, prefix, output_binary)
+    generate_values(ablate_type,tmp_dir, prefix, output_binary)
 
     return cost, output_binary
 
 
-def benchmark(prefix, ablateType, tmp_dir, logs_dir, plots_dir, num_parallel=1):
-    costs = parse_critical_comp_costs(tmp_dir, prefix)
+def benchmark(prefix, ablate_type, tmp_dir, logs_dir, plots_dir, num_parallel=1):
+    costs = parse_critical_comp_costs(ablate_type,tmp_dir, prefix)
 
-    original_avg_runtime = measure_runtime(tmp_dir, prefix, "example.exe", NUM_RUNS)
+    original_avg_runtime = measure_runtime(ablate_type,tmp_dir, prefix, "example.exe", NUM_RUNS)
     original_runtime = original_avg_runtime
 
     if original_runtime is None:
         print("Original binary timed out. Proceeding as if it doesn't exist.")
         return
 
-    generate_example_values(tmp_dir, prefix)
+    generate_example_values(ablate_type,tmp_dir, prefix)
 
-    generate_golden_values(tmp_dir, prefix)
+    generate_golden_values(ablate_type,tmp_dir, prefix)
 
-    golden_values_file = get_values_file_path(tmp_dir, prefix, "golden.exe")
+    golden_values_file = get_values_file_path(ablate_type,tmp_dir, prefix, "golden.exe")
     example_binary = "example.exe"
-    rel_errs_example = get_avg_rel_error(tmp_dir, prefix, golden_values_file, [example_binary])
+    rel_errs_example = get_avg_rel_error(ablate_type,tmp_dir, prefix, golden_values_file, [example_binary])
     rel_err_example = rel_errs_example[example_binary]
-    print(f"Average Rel Error for {prefix}example.exe: {rel_err_example}")
+    print(f"Average Rel Error for {ablate_type}-{prefix}example.exe: {rel_err_example}")
 
     data_tuples = []
 
-    args_list = [(cost, tmp_dir, prefix) for cost in costs]
+    args_list = [(cost, ablate_type, tmp_dir, prefix) for cost in costs]
 
     if num_parallel == 1:
         for args in args_list:
@@ -807,14 +809,14 @@ def benchmark(prefix, ablateType, tmp_dir, logs_dir, plots_dir, num_parallel=1):
     # Measure runtimes serially based on sorted budgets
     sorted_runtimes = []
     for cost, output_binary in zip(sorted_budgets, sorted_optimized_binaries):
-        avg_runtime = measure_runtime(tmp_dir, prefix, output_binary, NUM_RUNS)
+        avg_runtime = measure_runtime(ablate_type,tmp_dir, prefix, output_binary, NUM_RUNS)
         if avg_runtime is not None:
             sorted_runtimes.append(avg_runtime)
         else:
             print(f"Skipping cost {cost} due to runtime measurement failure.")
             sorted_runtimes.append(None)
 
-    errors_dict = get_avg_rel_error(tmp_dir, prefix, golden_values_file, sorted_optimized_binaries)
+    errors_dict = get_avg_rel_error(ablate_type,tmp_dir, prefix, golden_values_file, sorted_optimized_binaries)
     sorted_errors = []
     for binary in sorted_optimized_binaries:
         sorted_errors.append(errors_dict.get(binary))
@@ -831,12 +833,13 @@ def benchmark(prefix, ablateType, tmp_dir, logs_dir, plots_dir, num_parallel=1):
         "original_runtime": original_runtime,
         "original_error": rel_err_example,
     }
-    data_file = os.path.join(tmp_dir, f"{prefix}benchmark_data.pkl")
+    data_file = os.path.join(tmp_dir, f"{ablate_type}-{prefix}benchmark_data.pkl")
     with open(data_file, "wb") as f:
         pickle.dump(data, f)
     print(f"Benchmark data saved to {data_file}")
 
     plot_results(
+        ablate_type,
         plots_dir,
         prefix,
         sorted_budgets,
@@ -847,14 +850,15 @@ def benchmark(prefix, ablateType, tmp_dir, logs_dir, plots_dir, num_parallel=1):
     )
 
 
-def plot_from_data(tmp_dir, plots_dir, prefix, output_format="png"):
-    data_file = os.path.join(tmp_dir, f"{prefix}benchmark_data.pkl")
+def plot_from_data(ablate_type,tmp_dir, plots_dir, prefix, output_format="png"):
+    data_file = os.path.join(tmp_dir, f"{ablate_type}-{prefix}benchmark_data.pkl")
     if not os.path.exists(data_file):
         print(f"Data file {data_file} does not exist. Cannot plot.")
         sys.exit(1)
     with open(data_file, "rb") as f:
         data = pickle.load(f)
     plot_results(
+        ablate_type,
         plots_dir,
         prefix,
         data["budgets"],
@@ -1010,11 +1014,26 @@ def analyze_all_data(tmp_dir, thresholds=None):
             print(f"Allowed relative error ≤ {threshold}: No data")
 
  # tmp,logs,plots (hardcoded)
-def build_with_benchmark(prefix, ablateType, tmp_dir="tmp", logs_dir="logs", plots_dir="plots", num_parallel=1):
-    build_all(prefix,ablateType,tmp_dir,logs_dir)
+def build_with_benchmark(prefix, ablate_type, tmp_dir="tmp", logs_dir="logs", plots_dir="plots", num_parallel=1):
+    build_all(prefix,ablate_type,tmp_dir,logs_dir)
     # build_all(tmp_dir, logs_dir, prefix)
-    benchmark(prefix, ablateType, tmp_dir, logs_dir, plots_dir, num_parallel)
+    if (ablate_type < 5):
+        benchmark(prefix, ablate_type, tmp_dir, logs_dir, plots_dir, num_parallel)
+    elif (ablate_type == 5):
+        # 1, 12, 123, 1234
+        abtype = 0
+        for i in range(1,5):
+            abtype = abtype*10 + i
+            print(f"Benchmarking {abtype}-{prefix}fpopt")
+            #benchmark the current mix. 
+            # we will analyze all data by loading from the pkl file at the end!
+            benchmark(prefix,abtype,tmp_dir,logs_dir,plots_dir,num_parallel)
+        
+        # analyze all the data that we have now??
+    else:
+        print("wtf")
 
+    
 
 def remove_cache_dir():
     cache_dir = "cache"
@@ -1072,7 +1091,7 @@ def main():
         benchmark(prefix, args.ablation, tmp_dir, logs_dir, plots_dir, num_parallel=args.num_parallel)
         sys.exit(0)
     elif args.plot_only:
-        plot_from_data(tmp_dir, plots_dir, prefix, output_format=args.output_format)
+        plot_from_data(args.ablation,tmp_dir, plots_dir, prefix, output_format=args.output_format)
         sys.exit(0)
     elif args.analytics:
         analyze_all_data(tmp_dir)
