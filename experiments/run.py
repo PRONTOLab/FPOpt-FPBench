@@ -710,28 +710,25 @@ def build_all(prefix, ablateType, tmp_dir="tmp", logs_dir="logs"):
         compile_example_fpopt_exe(ablateType,tmp_dir,prefix,fpoptflags,output=f"example-fpopt.exe")
         
     elif (ablateType == 5):
-        log_prefix = f"all-{prefix}"
         # build  1, 12,123,1234
+        atype = 0
         for i in range(1,5):
-            # 1, 12,...
-            fpoptflags = []
-            log_prefix = f"{i}-" + log_prefix
+            atype = atype*10 + i
+            
+            #regenerate everything
+            compile_example_exe(tmp_dir,prefix,atype)
+            compile_example_logged_exe(tmp_dir,prefix,atype)
+            generate_example_txt(tmp_dir,prefix,atype)
 
+            fpoptflags = []
             for flag in FPOPTFLAGS_BASE:
                 if flag.startswith("--fpopt-log-path="):
-                    fpoptflags.append(f"--fpopt-log-path=tmp/{log_prefix}example.txt")
+                    fpoptflags.append(f"--fpopt-log-path=tmp/{atype}-{prefix}example.txt")
                 else:
                     fpoptflags.append(flag)
+            compile_example_fpopt_exe(atype,tmp_dir,prefix,fpoptflags,output=f"example-fpopt.exe") 
     else:
         print("wtf")
-
-    #     fpoptflags = []
-    #
-    #     for flag in FPOPTFLAGS_BASE:
-    #         if flag.startswith("--fpopt-log-path="):
-    #             fpoptflags.append(f"--fpopt-log-path=tmp/{prefix}example.txt")
-    #         else:
-    #             fpoptflags.append(flag)
     # compile_example_fpopt_exe(tmp_dir, prefix, fpoptflags, output="example-fpopt.exe")
     print("=== Initial build process completed successfully ===")
 
