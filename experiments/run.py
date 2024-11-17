@@ -19,7 +19,7 @@ from matplotlib import rcParams
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
 HOME = "/home/vimarsh6739"
-ENZYME_PATH = "/home/vimarsh6739/higher-order/Enzyme/enzyme/build/Enzyme/ClangEnzyme-15.so"
+ENZYME_PATH = "/home/vimarsh6739/higher-order/Enzyme/enzyme/build_herbie/Enzyme/ClangEnzyme-15.so"
 LLVM_PATH = "/home/vimarsh6739/tools/bin"
 CXX = os.path.join(LLVM_PATH, "clang++")
 

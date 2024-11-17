@@ -1,5 +1,5 @@
 HOME ?= /home/vimarsh6739/
-ENZYME_PATH ?= $(HOME)/higher-order/Enzyme/enzyme/build/Enzyme/ClangEnzyme-15.so
+ENZYME_PATH ?= $(HOME)/higher-order/Enzyme/enzyme/build_herbie/Enzyme/ClangEnzyme-15.so
 LLVM_PATH ?= $(HOME)/tools/bin
 CXX = $(LLVM_PATH)/clang++
 
