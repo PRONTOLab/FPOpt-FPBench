@@ -506,7 +506,7 @@ def remove_cache_dir():
         print("=== Removed existing cache directory ===")
 
 
-def plot_ablation_results(tmp_dir, plots_dir, output_format="png"):
+def plot_ablation_results(tmp_dir, plots_dir, original_prefix, output_format="png"):
     ablation_data_file = os.path.join(tmp_dir, "ablation.pkl")
     if not os.path.exists(ablation_data_file):
         print(f"Ablation data file {ablation_data_file} does not exist. Cannot plot.")
@@ -566,7 +566,7 @@ def plot_ablation_results(tmp_dir, plots_dir, output_format="png"):
     plt.legend()
     plt.grid(True)
 
-    plot_filename = os.path.join(plots_dir, f"ablation_pareto_front.{output_format}")
+    plot_filename = os.path.join(plots_dir, f"{original_prefix}ablation_pareto_front.{output_format}")
     plt.savefig(plot_filename, bbox_inches="tight", dpi=300)
     plt.close()
     print(f"Ablation plot saved to {plot_filename}")
@@ -601,7 +601,7 @@ def main():
         clean(tmp_dir, logs_dir, plots_dir)
         sys.exit(0)
     elif args.plot_only:
-        plot_ablation_results(tmp_dir, plots_dir, args.output_format)
+        plot_ablation_results(tmp_dir, plots_dir, original_prefix, args.output_format)
         sys.exit(0)
     else:
         # Generate example.txt only once with the original prefix
@@ -642,7 +642,7 @@ def main():
             pickle.dump(all_data, f)
         print(f"Ablation data saved to {ablation_data_file}")
 
-        plot_ablation_results(tmp_dir, plots_dir, args.output_format)
+        plot_ablation_results(tmp_dir, plots_dir, original_prefix, args.output_format)
 
 
 if __name__ == "__main__":
