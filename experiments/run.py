@@ -517,7 +517,7 @@ def plot_results(
 
         pareto_front = [sorted_points[0]]
         for point in sorted_points[1:]:
-            if point[1] <= pareto_front[-1][1]:
+            if point[1] < pareto_front[-1][1]:
                 pareto_front.append(point)
 
         pareto_front = np.array(pareto_front)
