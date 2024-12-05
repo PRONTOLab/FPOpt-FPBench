@@ -506,8 +506,8 @@ def remove_cache_dir():
         print("=== Removed existing cache directory ===")
 
 
-def plot_ablation_results(tmp_dir, plots_dir, original_prefix, output_format="png"):
-    ablation_data_file = os.path.join(tmp_dir, "ablation.pkl")
+def plot_ablation_results(tmp_dir, plots_dir, original_prefix, prefix, output_format="png"):
+    ablation_data_file = os.path.join(tmp_dir, f"{prefix}ablation.pkl")
     if not os.path.exists(ablation_data_file):
         print(f"Ablation data file {ablation_data_file} does not exist. Cannot plot.")
         sys.exit(1)
@@ -554,7 +554,13 @@ def plot_ablation_results(tmp_dir, plots_dir, original_prefix, output_format="pn
 
         pareto_front = np.array(pareto_front)
 
-        plt.plot(pareto_front[:, 0], pareto_front[:, 1], linestyle="-", color=color)
+        plt.step(
+            pareto_front[:, 0],
+            pareto_front[:, 1],
+            where="post",
+            linestyle="-",
+            color=color,
+        )
 
     # Plot the original program
     plt.scatter(original_runtime, original_error, marker="x", color="black", s=100, label="Original Program")
@@ -566,7 +572,7 @@ def plot_ablation_results(tmp_dir, plots_dir, original_prefix, output_format="pn
     plt.legend()
     plt.grid(True)
 
-    plot_filename = os.path.join(plots_dir, f"{original_prefix}ablation_pareto_front.{output_format}")
+    plot_filename = os.path.join(plots_dir, f"{prefix}ablation_pareto_front.{output_format}")
     plt.savefig(plot_filename, bbox_inches="tight", dpi=300)
     plt.close()
     print(f"Ablation plot saved to {plot_filename}")
@@ -601,7 +607,7 @@ def main():
         clean(tmp_dir, logs_dir, plots_dir)
         sys.exit(0)
     elif args.plot_only:
-        plot_ablation_results(tmp_dir, plots_dir, original_prefix, args.output_format)
+        plot_ablation_results(tmp_dir, plots_dir, original_prefix, original_prefix, args.output_format)
         sys.exit(0)
     else:
         # Generate example.txt only once with the original prefix
@@ -616,7 +622,6 @@ def main():
             print(f"=== Running ablation study with widen-range={X} ===")
             remove_cache_dir()
             FPOPTFLAGS_BASE = FPOPTFLAGS_BASE_TEMPLATE.copy()
-            # Update the --fpopt-log-path to point to the existing example.txt
             for idx, flag in enumerate(FPOPTFLAGS_BASE):
                 if flag.startswith("--fpopt-log-path="):
                     FPOPTFLAGS_BASE[idx] = f"--fpopt-log-path={example_txt_path}"
@@ -637,12 +642,12 @@ def main():
 
             all_data[X] = data
 
-        ablation_data_file = os.path.join(tmp_dir, "ablation.pkl")
+        ablation_data_file = os.path.join(tmp_dir, f"{original_prefix}ablation.pkl")
         with open(ablation_data_file, "wb") as f:
             pickle.dump(all_data, f)
         print(f"Ablation data saved to {ablation_data_file}")
 
-        plot_ablation_results(tmp_dir, plots_dir, original_prefix, args.output_format)
+        plot_ablation_results(tmp_dir, plots_dir, original_prefix, original_prefix, args.output_format)
 
 
 if __name__ == "__main__":
