@@ -57,6 +57,10 @@ FPOPTFLAGS_BASE_TEMPLATE = [
     "-mllvm",
     "--fpopt-enable-pt",
     "-mllvm",
+    "--fpopt-cost-dom-thres=0",
+    "-mllvm",
+    "--fpopt-acc-dom-thres=0",
+    "-mllvm",
     "--fpopt-comp-cost-budget=0",
     "-mllvm",
     "--herbie-num-threads=8",
@@ -619,16 +623,17 @@ def plot_ablation_results(tmp_dir, plots_dir, original_prefix, prefix, output_fo
     ax1.set_xlabel("Runtimes (seconds)")
     ax1.set_ylabel("Relative Errors (%)")
     ax1.set_title("Pareto Fronts for Different widen-range Values")
-    ax1.set_yscale("log")
+    ax1.set_yscale("symlog", linthresh=1e-15)
+    ax1.set_ylim(bottom=0)
     ax1.legend()
     ax1.grid(True)
 
     if ax2 is not None:
-        ax2.set_xlabel("Predicted Cost")
-        ax2.set_ylabel("Predicted Error (%)")
+        ax2.set_xlabel("Cost Budget")
+        ax2.set_ylabel("Predicted Error")
         ax2.set_title("Predicted Pareto Fronts")
-        ax2.set_yscale("log")
-        ax2.legend()
+        ax2.set_yscale("symlog", linthresh=1e-15)
+        ax2.set_ylim(bottom=-1e-13)
         ax2.grid(True)
 
     plot_filename = os.path.join(plots_dir, f"{prefix}ablation_widen_range_pareto_front.{output_format}")

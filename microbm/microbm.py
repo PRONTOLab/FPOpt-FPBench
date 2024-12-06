@@ -10,8 +10,11 @@ import mpmath
 
 random.seed(42)
 
+# FAST_MATH_FLAG = "fast"
+FAST_MATH_FLAG = "reassoc nsz arcp contract afn"
+
 instructions = ["fneg", "fadd", "fsub", "fmul", "fdiv", "fcmp", "fptrunc", "fpext"]
-functions = ["sin", "cos", "tan", "exp", "log", "sqrt", "expm1", "log1p", "cbrt", "pow", "fabs", "hypot", "fma"]
+functions = ["fmuladd", "sin", "cos", "tan", "exp", "log", "sqrt", "expm1", "log1p", "cbrt", "pow", "fabs", "hypot", "fma"]
 
 precisions = ["float", "double"]
 # precisions = ["bf16", "half", "float", "double", "fp80", "fp128"]
@@ -250,7 +253,7 @@ body:
 
         for idx, hex_a in enumerate(hex_fps):
             code += f"  %result{idx} = fptrunc {src_type} {hex_a} to {dst_type}\n"
-            code += f"  %acc_val{idx+1} = fadd fast {dst_type} %acc_val{idx}, %result{idx}\n"
+            code += f"  %acc_val{idx+1} = fadd {FAST_MATH_FLAG} {dst_type} %acc_val{idx}, %result{idx}\n"
 
         code += f"""
   store {dst_type} %acc_val{len(hex_fps)}, {dst_type}* %acc
@@ -291,7 +294,7 @@ body:
 
         for idx, hex_a in enumerate(hex_fps):
             code += f"  %result{idx} = fpext {src_type} {hex_a} to {dst_type}\n"
-            code += f"  %acc_val{idx+1} = fadd fast {dst_type} %acc_val{idx}, %result{idx}\n"
+            code += f"  %acc_val{idx+1} = fadd {FAST_MATH_FLAG} {dst_type} %acc_val{idx}, %result{idx}\n"
 
         code += f"""
   store {dst_type} %acc_val{len(hex_fps)}, {dst_type}* %acc
@@ -342,8 +345,8 @@ body:
 """
 
         for idx, (hex_a, hex_b) in enumerate(hex_pairs):
-            code += f"  %result{idx} = {op} fast {llvm_type} {hex_a}, {hex_b}\n"
-            code += f"  %acc_val{idx+1} = fadd fast {llvm_type} %acc_val{idx}, %result{idx}\n"
+            code += f"  %result{idx} = {op} {FAST_MATH_FLAG} {llvm_type} {hex_a}, {hex_b}\n"
+            code += f"  %acc_val{idx+1} = fadd {FAST_MATH_FLAG} {llvm_type} %acc_val{idx}, %result{idx}\n"
 
         code += f"""
   store {llvm_type} %acc_val{len(hex_pairs)}, {llvm_type}* %acc
@@ -383,8 +386,8 @@ body:
 """
 
         for idx, hex_a in enumerate(hex_fps):
-            code += f"  %result{idx} = fneg fast {llvm_type} {hex_a}\n"
-            code += f"  %acc_val{idx+1} = fadd fast {llvm_type} %acc_val{idx}, %result{idx}\n"
+            code += f"  %result{idx} = fneg {FAST_MATH_FLAG} {llvm_type} {hex_a}\n"
+            code += f"  %acc_val{idx+1} = fadd {FAST_MATH_FLAG} {llvm_type} %acc_val{idx}, %result{idx}\n"
 
         code += f"""
   store {llvm_type} %acc_val{len(hex_fps)}, {llvm_type}* %acc
@@ -425,7 +428,7 @@ body:
             b = generate_random_fp(precision)
             hex_a = float_to_llvm_hex(a, precision)
             hex_b = float_to_llvm_hex(b, precision)
-            code += f"  %cmp{idx} = fcmp fast olt {llvm_type} {hex_a}, {hex_b}\n"
+            code += f"  %cmp{idx} = fcmp {FAST_MATH_FLAG} olt {llvm_type} {hex_a}, {hex_b}\n"
             code += f"  %cmp_int{idx} = zext i1 %cmp{idx} to i32\n"
 
         code += f"  %acc_val0 = load i32, i32* %acc\n"
@@ -465,19 +468,19 @@ def generate_llvm_function_call(function_name, precision, iterations):
         function_intrinsic = f"llvm.pow.{intrinsic_suffix}"
         code += f"declare {llvm_type} @{function_intrinsic}({llvm_type}, {llvm_type})\n"
         function_call_template = (
-            f"call fast {llvm_type} @{function_intrinsic}({llvm_type} {{arg1}}, {llvm_type} {{arg2}})"
+            f"call {FAST_MATH_FLAG} {llvm_type} @{function_intrinsic}({llvm_type} {{arg1}}, {llvm_type} {{arg2}})"
         )
     elif function_name == "fmuladd":
         function_intrinsic = f"llvm.fmuladd.{intrinsic_suffix}"
         code += f"declare {llvm_type} @{function_intrinsic}({llvm_type}, {llvm_type}, {llvm_type})\n"
-        function_call_template = f"call fast {llvm_type} @{function_intrinsic}({llvm_type} {{arg1}}, {llvm_type} {{arg2}}, {llvm_type} {{arg3}})"
+        function_call_template = f"call {FAST_MATH_FLAG} {llvm_type} @{function_intrinsic}({llvm_type} {{arg1}}, {llvm_type} {{arg2}}, {llvm_type} {{arg3}})"
     elif function_name in functions_with_intrinsics:
         function_intrinsic = f"llvm.{function_name}.{intrinsic_suffix}"
         code += f"declare {llvm_type} @{function_intrinsic}({llvm_type})\n"
-        function_call_template = f"call fast {llvm_type} @{function_intrinsic}({llvm_type} {{arg1}})"
+        function_call_template = f"call {FAST_MATH_FLAG} {llvm_type} @{function_intrinsic}({llvm_type} {{arg1}})"
     else:
         code += f"declare {llvm_type} @{function_name}({llvm_type})\n"
-        function_call_template = f"call fast {llvm_type} @{function_name}({llvm_type} {{arg1}})"
+        function_call_template = f"call {FAST_MATH_FLAG} {llvm_type} @{function_name}({llvm_type} {{arg1}})"
     code += f"""
 define i32 @main() {{
 entry:
@@ -522,7 +525,7 @@ body:
             function_call = function_call_template.format(arg1=hex_a)
 
         code += f"  %result{idx} = {function_call}\n"
-        code += f"  %acc_val{idx+1} = fadd fast {llvm_type} %acc_val{idx}, %result{idx}\n"
+        code += f"  %acc_val{idx+1} = fadd {FAST_MATH_FLAG} {llvm_type} %acc_val{idx}, %result{idx}\n"
 
     code += f"""
   store {llvm_type} %acc_val{unrolled}, {llvm_type}* %acc
