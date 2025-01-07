@@ -19,12 +19,15 @@ FPOPTFLAGS += -mllvm --enzyme-enable-fpopt \
 		   -mllvm --enzyme-print-fpopt \
 		   -mllvm --fpopt-log-path=example.txt \
 		   -mllvm --fpopt-target-func-regex=example \
+		   -mllvm --fpopt-enable-herbie=1 \
 		   -mllvm --fpopt-enable-solver \
 		   -mllvm --fpopt-enable-pt \
 		   -mllvm --fpopt-comp-cost-budget=0 \
 		   -mllvm --fpopt-num-samples=1000 \
 		   -mllvm --fpopt-show-table \
-		   -mllvm --fpopt-cost-model-path=../microbm/cm.csv
+		   -mllvm --fpopt-cache-path=cache \
+		   -mllvm --fpopt-widen-range=10 \
+		   -mllvm --fpopt-cost-model-path=/home/sbrantq/sync/FPBench/microbm/cm.csv
 
 SRC ?= example.c
 LOGGER ?= fp-logger.cpp

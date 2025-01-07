@@ -66,7 +66,7 @@ FPOPTFLAGS_BASE = [
     "-mllvm",
     "--fpopt-num-samples=1024",
     "-mllvm",
-    "--fpopt-cost-model-path=../microbm/cm.csv",
+    "--fpopt-cost-model-path=/home/sbrantq/sync/FPBench/microbm/cm.csv",
     "-mllvm",
     "-fpopt-cache-path=cache",
 ]
