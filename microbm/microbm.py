@@ -29,12 +29,63 @@ functions = [
     "cbrt",
     "pow",
     "fabs",
-    "hypot",
     "fma",
+    "maxnum",
+    "minnum",
+    "ceil",
+    "floor",
+    "exp2",
+    "log10",
+    "log2",
+    "rint",
+    "round",
+    "trunc",
+    "copysign",
+    "fdim",
+    "fmod",
+    "asin",
+    "acos",
+    "atan",
+    "atan2",
+    "sinh",
+    "cosh",
+    "tanh",
+    "asinh",
+    "acosh",
+    "atanh",
+    "hypot",
+    "erf",
+    "lgamma",
+    "tgamma",
+    "remainder",
 ]
+functions_with_intrinsics = {
+    "sin",
+    "cos",
+    "exp",
+    "log",
+    "sqrt",
+    "pow",
+    "fabs",
+    "fma",
+    "maxnum",
+    "minnum",
+    "ceil",
+    "floor",
+    "exp2",
+    "log10",
+    "log2",
+    "rint",
+    "round",
+    "trunc",
+    "copysign",
+    "fdim",
+    "fmod",
+}
+
 precisions = ["float", "double"]
-iterations = 100000000
-unrolled = 128
+iterations = 1
+unrolled = 1
 
 precision_to_llvm_type = {
     "double": "double",
@@ -53,8 +104,6 @@ precision_to_intrinsic_suffix = {
     "fp128": "f128",
     "bf16": "bf16",
 }
-
-functions_with_intrinsics = {"sin", "cos", "exp", "log", "sqrt", "pow", "fabs", "fmuladd"}
 
 precision_ranks = {"bf16": 0, "half": 1, "float": 2, "double": 3, "fp80": 4, "fp128": 5}
 precisions_ordered = ["bf16", "half", "float", "double", "fp80", "fp128"]
@@ -83,7 +132,6 @@ def float64_to_fp80_bytes(value: np.float64) -> bytes:
     sign = (bits >> 63) & 0x1
     exponent = (bits >> 52) & 0x7FF
     mantissa = bits & 0xFFFFFFFFFFFFF
-
     if exponent == 0:
         if mantissa == 0:
             fp80_exponent = 0
@@ -109,7 +157,6 @@ def float64_to_fp80_bytes(value: np.float64) -> bytes:
         exponent_bias_80 = 16383
         fp80_exponent = exponent - exponent_bias_64 + exponent_bias_80
         fp80_mantissa = (0x8000000000000000) | (mantissa << (63 - 52))
-
     exponent_sign = (sign << 15) | fp80_exponent
     fp80_bits = (exponent_sign << 64) | fp80_mantissa
     fp80_bytes = fp80_bits.to_bytes(10, byteorder="big")
@@ -122,7 +169,6 @@ def float64_to_fp128_bytes(value: np.float64) -> bytes:
     sign = (bits >> 63) & 0x1
     exponent = (bits >> 52) & 0x7FF
     mantissa = bits & 0xFFFFFFFFFFFFF
-
     if exponent == 0:
         fp128_exponent = 0
     elif exponent == 0x7FF:
@@ -131,7 +177,6 @@ def float64_to_fp128_bytes(value: np.float64) -> bytes:
         exponent_bias_64 = 1023
         exponent_bias_128 = 16383
         fp128_exponent = exponent - exponent_bias_64 + exponent_bias_128
-
     fp128_mantissa = mantissa << 60
     fp128_bits = (sign << 127) | (fp128_exponent << 112) | fp128_mantissa
     fp128_bytes = fp128_bits.to_bytes(16, byteorder="big")
@@ -267,7 +312,6 @@ define void @use({dst_type} %val) {{
 }}
 """
         return code
-
     elif instruction == "fpext":
         random_fps = [generate_random_fp(src_precision) for _ in range(unrolled)]
         hex_fps = [float_to_llvm_hex(f, src_precision) for f in random_fps]
@@ -356,7 +400,6 @@ define void @use({llvm_type} %val) {{
 }}
 """
         return code
-
     elif instruction == "fneg":
         random_fps = [generate_random_fp(precision) for _ in range(unrolled)]
         hex_fps = [float_to_llvm_hex(f, precision) for f in random_fps]
@@ -397,7 +440,6 @@ define void @use({llvm_type} %val) {{
 }}
 """
         return code
-
     elif instruction == "fcmp":
         code = f"""
 define i32 @main() optnone noinline {{
@@ -422,11 +464,9 @@ body:
             hex_b = float_to_llvm_hex(b, precision)
             code += f"  %cmp{idx} = fcmp {FAST_MATH_FLAG} olt {llvm_type} {hex_a}, {hex_b}\n"
             code += f"  %cmp_int{idx} = zext i1 %cmp{idx} to i32\n"
-
         code += "  %acc_val0 = load i32, i32* %acc\n"
         for idx in range(unrolled):
             code += f"  %acc_val{idx+1} = add i32 %acc_val{idx}, %cmp_int{idx}\n"
-
         code += f"""
   store i32 %acc_val{unrolled}, i32* %acc
   %i_next = add i32 %i_val, 1
@@ -448,17 +488,18 @@ define void @use_i32(i32 %val) {{
 
 
 def generate_llvm_function_call(function_name, precision, iterations):
+    print(f"DEBUG: Generating LLVM code for {function_name} @ {precision}")
     llvm_type = precision_to_llvm_type[precision]
     intrinsic_suffix = precision_to_intrinsic_suffix.get(precision)
     if not intrinsic_suffix:
         return ""
     zero_literal = get_zero_literal(precision)
-    if function_name == "pow":
+    if function_name in ["pow", "maxnum", "minnum", "atan2", "copysign", "fdim", "fmod"]:
         fn = f"llvm.pow.{intrinsic_suffix}"
         decl = f"declare {llvm_type} @{fn}({llvm_type}, {llvm_type})"
         tmpl = f"call {FAST_MATH_FLAG} {llvm_type} @{fn}({llvm_type} {{arg1}}, {llvm_type} {{arg2}})"
-    elif function_name == "fmuladd":
-        fn = f"llvm.fmuladd.{intrinsic_suffix}"
+    elif function_name in ["fma", "fmuladd"]:
+        fn = f"llvm.{function_name}.{intrinsic_suffix}"
         decl = f"declare {llvm_type} @{fn}({llvm_type}, {llvm_type}, {llvm_type})"
         tmpl = (
             f"call {FAST_MATH_FLAG} {llvm_type} @{fn}({llvm_type} {{arg1}}, {llvm_type} {{arg2}}, {llvm_type} {{arg3}})"
@@ -471,7 +512,6 @@ def generate_llvm_function_call(function_name, precision, iterations):
         fn = function_name
         decl = f"declare {llvm_type} @{fn}({llvm_type})"
         tmpl = f"call {FAST_MATH_FLAG} {llvm_type} @{fn}({llvm_type} {{arg1}})"
-
     code = (
         decl
         + f"""
@@ -493,13 +533,13 @@ body:
 """
     )
     for idx in range(unrolled):
-        if function_name in ["pow", "hypot"]:
+        if function_name in ["pow", "hypot", "atan2", "maxnum", "minnum", "copysign", "fdim", "fmod"]:
             a = generate_random_fp(precision)
             b = generate_random_fp(precision)
             hex_a = float_to_llvm_hex(a, precision)
             hex_b = float_to_llvm_hex(b, precision)
             call_ = tmpl.format(arg1=hex_a, arg2=hex_b)
-        elif function_name == "fmuladd":
+        elif function_name in ["fma", "fmuladd"]:
             a = generate_random_fp(precision)
             b = generate_random_fp(precision)
             c = generate_random_fp(precision)

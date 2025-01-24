@@ -54,8 +54,7 @@ def extract_functions_from_c_file(content, func_regex="ex\\d+"):
     return functions
 
 
-def process_function_task(task):
-    func, base_name = task
+def process_function_task(func, base_name, plot_only):
     func_name = func["func_name"]
     return_type = func["return_type"]
     params = func["params"]
@@ -77,13 +76,22 @@ def process_function_task(task):
     example_c_content = includes + "\n" + func_code
     with open(example_c_filepath, "w") as f:
         f.write(example_c_content)
+    
+    base_command = ["python3", "run.py", "--prefix", prefix]
+    
+    if plot_only:
+        base_command.append("--plot-only")
+    
     try:
-        subprocess.check_call(["python3", "run.py", "--prefix", prefix])
-    except subprocess.CalledProcessError as e:
+        subprocess.check_call(base_command)
+    except subprocess.CalledProcessError:
         print(f"Error running run.py for function {func_name} in base {base_name}. Retrying with --disable-preopt.")
+        retry_command = ["python3", "run.py", "--prefix", prefix, "--disable-preopt"]
+        if plot_only:
+            retry_command.append("--plot-only")
         try:
-            subprocess.check_call(["python3", "run.py", "--prefix", prefix, "--disable-preopt"])
-        except subprocess.CalledProcessError as e:
+            subprocess.check_call(retry_command)
+        except subprocess.CalledProcessError:
             print(f"Error running run.py with --disable-preopt for function {func_name} in base {base_name}")
 
 
@@ -91,10 +99,12 @@ def main():
     parser = argparse.ArgumentParser(description="Process functions from .fpcore files.")
     parser.add_argument("-j", type=int, help="Number of parallel tasks", default=1)
     parser.add_argument("--regen", action="store_true", help="Force regeneration of .c files")
+    parser.add_argument("--plot-only", action="store_true", help="Only plot the results")
     args = parser.parse_args()
 
     num_parallel_tasks = args.j
     force_regen = args.regen
+    plot_only = args.plot_only
 
     source_dir = "../benchmarks"
     exported_dir = "exported"
@@ -123,7 +133,7 @@ def main():
             try:
                 print("Running command: ", " ".join(["racket", racket_script, fpcore_file, c_filepath]))
                 subprocess.check_call(["racket", racket_script, fpcore_file, c_filepath])
-            except subprocess.CalledProcessError as e:
+            except subprocess.CalledProcessError:
                 print(f"Error running export.rkt on {filename}")
                 continue
 
@@ -137,16 +147,16 @@ def main():
         for func in functions:
             func_name = func["func_name"]
             print(f"Found function: {func_name}")
-            task = (func, base_name)
+            task = (func, base_name, plot_only)
             tasks.append(task)
 
     if tasks:
         if num_parallel_tasks == 1:
             for task in tasks:
-                process_function_task(task)
+                process_function_task(*task)
         else:
             with multiprocessing.Pool(num_parallel_tasks) as pool:
-                pool.map(process_function_task, tasks)
+                pool.starmap(process_function_task, tasks)
     else:
         print("No functions to process.")
 

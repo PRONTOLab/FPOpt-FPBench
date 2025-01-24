@@ -19,8 +19,8 @@ from matplotlib import rcParams
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
 HOME = "/home/sbrantq"
-ENZYME_PATH = os.path.join(HOME, "sync/Enzyme/build/Enzyme/ClangEnzyme-15.so")
-LLVM_PATH = os.path.join(HOME, "llvms/llvm15/build/bin")
+ENZYME_PATH = os.path.join(HOME, "sync/Enzyme/build/Enzyme/ClangEnzyme-16.so")
+LLVM_PATH = os.path.join(HOME, "llvms/llvm16/build/bin")
 CXX = os.path.join(LLVM_PATH, "clang++")
 
 CXXFLAGS = [
@@ -443,7 +443,7 @@ def plot_results(
         color_runtime = "tab:blue"
         ax1.set_xlabel("Computation Cost Budget")
         ax1.set_ylabel("Runtimes (seconds)", color=color_runtime)
-        (line1,) = ax1.plot(
+        (line1,) = ax1.step(
             budgets, runtimes, marker="o", linestyle="-", label="Optimized Runtimes", color=color_runtime
         )
         if original_runtime is not None:
@@ -453,7 +453,7 @@ def plot_results(
         ax2 = ax1.twinx()
         color_error = "tab:green"
         ax2.set_ylabel("Relative Errors (%)", color=color_error)
-        (line3,) = ax2.plot(
+        (line3,) = ax2.step(
             budgets, errors, marker="s", linestyle="-", label="Optimized Relative Errors", color=color_error
         )
         if original_error is not None:
@@ -522,7 +522,7 @@ def plot_results(
 
         pareto_front = np.array(pareto_front)
 
-        (line_pareto,) = ax3.plot(
+        (line_pareto,) = ax3.step(
             pareto_front[:, 0], pareto_front[:, 1], linestyle="-", color="purple", label="Pareto Front"
         )
         ax3.set_yscale("log")
@@ -562,7 +562,7 @@ def plot_results(
         color_runtime = "tab:blue"
         ax1.set_xlabel("Computation Cost Budget")
         ax1.set_ylabel("Runtimes (seconds)", color=color_runtime)
-        (line1,) = ax1.plot(
+        (line1,) = ax1.step(
             budgets, runtimes, marker="o", linestyle="-", label="Optimized Runtimes", color=color_runtime
         )
         if original_runtime is not None:
@@ -572,7 +572,7 @@ def plot_results(
         ax2 = ax1.twinx()
         color_error = "tab:green"
         ax2.set_ylabel("Relative Errors (%)", color=color_error)
-        (line3,) = ax2.plot(
+        (line3,) = ax2.step(
             budgets, errors, marker="s", linestyle="-", label="Optimized Relative Errors", color=color_error
         )
         if original_error is not None:
@@ -631,7 +631,7 @@ def plot_results(
 
         pareto_front = np.array(pareto_front)
 
-        (line_pareto,) = ax3.plot(
+        (line_pareto,) = ax3.step(
             pareto_front[:, 0], pareto_front[:, 1], linestyle="-", color="purple", label="Pareto Front"
         )
         ax3.set_yscale("log")
