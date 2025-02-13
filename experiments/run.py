@@ -8,6 +8,7 @@ import time
 import re
 import argparse
 import matplotlib.pyplot as plt
+import scipy.stats.mstats as ssm
 import math
 import random
 import numpy as np
@@ -19,7 +20,7 @@ from matplotlib import rcParams
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
 HOME = "/home/sbrantq"
-ENZYME_PATH = os.path.join(HOME, "sync/Enzyme/build/Enzyme/ClangEnzyme-16.so")
+ENZYME_PATH = os.path.join(HOME, "sync/Enzyme/build-debug/Enzyme/ClangEnzyme-16.so")
 LLVM_PATH = os.path.join(HOME, "llvms/llvm16/build/bin")
 CXX = os.path.join(LLVM_PATH, "clang++")
 
@@ -78,6 +79,36 @@ NUM_RUNS = 10
 DRIVER_NUM_SAMPLES = 10000000
 LOG_NUM_SAMPLES = 10000
 MAX_TESTED_COSTS = 999
+
+
+# https://arxiv.org/pdf/1806.06403
+def geomean(dataset):
+    dataset = np.array(dataset)
+    epsilon = 1e-5
+
+    dataset_nozeros = dataset[dataset > 0]
+
+    if len(dataset_nozeros) == 0:
+        return 0.0
+
+    geomeanNozeros = ssm.gmean(dataset_nozeros)
+
+    deltamin = 0
+    deltamax = geomeanNozeros - min(dataset_nozeros)
+    delta = (deltamin + deltamax) / 2
+
+    epsilon = epsilon * geomeanNozeros
+    auxExp = math.exp(np.mean(np.log(dataset_nozeros + delta))) - delta
+    while (auxExp - geomeanNozeros) > epsilon:
+        if auxExp < geomeanNozeros:
+            deltamin = delta
+        else:
+            deltamax = delta
+        delta = (deltamin + deltamax) / 2
+        auxExp = math.exp(np.mean(np.log(dataset_nozeros + delta))) - delta
+
+    gmeanE = math.exp(np.mean(np.log(dataset + delta))) - delta
+    return gmeanE
 
 
 def run_command(command, description, capture_output=False, output_file=None, verbose=True, timeout=None):
@@ -383,7 +414,7 @@ def get_avg_rel_error(tmp_dir, prefix, golden_values_file, binaries):
                 continue
             if g == 0:
                 continue
-            error = abs((v - g) / g) * 100
+            error = abs((v - g) / g)
             valid_errors.append(error)
 
         if not valid_errors:
@@ -392,9 +423,7 @@ def get_avg_rel_error(tmp_dir, prefix, golden_values_file, binaries):
             continue
 
         try:
-            log_sum = sum(math.log1p(e) for e in valid_errors)
-            geo_mean = math.expm1(log_sum / len(valid_errors))
-            errors[binary] = geo_mean
+            errors[binary] = geomean(valid_errors)
         except OverflowError:
             print(
                 f"Overflow error encountered while computing geometric mean for binary {binary}. Setting rel error to None."
@@ -444,7 +473,7 @@ def plot_results(
         ax1.set_xlabel("Computation Cost Budget")
         ax1.set_ylabel("Runtimes (seconds)", color=color_runtime)
         (line1,) = ax1.step(
-            budgets, runtimes, marker="o", linestyle="-", label="Optimized Runtimes", color=color_runtime
+            budgets, runtimes, marker="o", linestyle="-", label="Optimized Runtimes", color=color_runtime, where="post"
         )
         if original_runtime is not None:
             line2 = ax1.axhline(y=original_runtime, color=color_runtime, linestyle="--", label="Original Runtime")
@@ -452,9 +481,15 @@ def plot_results(
 
         ax2 = ax1.twinx()
         color_error = "tab:green"
-        ax2.set_ylabel("Relative Errors (%)", color=color_error)
+        ax2.set_ylabel("Relative Errors", color=color_error)
         (line3,) = ax2.step(
-            budgets, errors, marker="s", linestyle="-", label="Optimized Relative Errors", color=color_error
+            budgets,
+            errors,
+            marker="s",
+            linestyle="-",
+            label="Optimized Relative Errors",
+            color=color_error,
+            where="post",
         )
         if original_error is not None:
             line4 = ax2.axhline(y=original_error, color=color_error, linestyle="--", label="Original Relative Error")
@@ -495,7 +530,7 @@ def plot_results(
         fig2, ax3 = plt.subplots(figsize=(10, 8))  # Adjust size as needed
 
         ax3.set_xlabel("Runtimes (seconds)")
-        ax3.set_ylabel("Relative Errors (%)")
+        ax3.set_ylabel("Relative Errors")
         ax3.set_title(f"Pareto Front of Optimized Programs ({prefix[:-1]})")
 
         scatter1 = ax3.scatter(runtimes, errors, label="Optimized Programs", color="blue")
@@ -523,7 +558,7 @@ def plot_results(
         pareto_front = np.array(pareto_front)
 
         (line_pareto,) = ax3.step(
-            pareto_front[:, 0], pareto_front[:, 1], linestyle="-", color="purple", label="Pareto Front"
+            pareto_front[:, 0], pareto_front[:, 1], linestyle="-", color="purple", label="Pareto Front", where="post"
         )
         ax3.set_yscale("log")
 
@@ -563,7 +598,7 @@ def plot_results(
         ax1.set_xlabel("Computation Cost Budget")
         ax1.set_ylabel("Runtimes (seconds)", color=color_runtime)
         (line1,) = ax1.step(
-            budgets, runtimes, marker="o", linestyle="-", label="Optimized Runtimes", color=color_runtime
+            budgets, runtimes, marker="o", linestyle="-", label="Optimized Runtimes", color=color_runtime, where="post"
         )
         if original_runtime is not None:
             line2 = ax1.axhline(y=original_runtime, color=color_runtime, linestyle="--", label="Original Runtime")
@@ -571,9 +606,15 @@ def plot_results(
 
         ax2 = ax1.twinx()
         color_error = "tab:green"
-        ax2.set_ylabel("Relative Errors (%)", color=color_error)
+        ax2.set_ylabel("Relative Errors", color=color_error)
         (line3,) = ax2.step(
-            budgets, errors, marker="s", linestyle="-", label="Optimized Relative Errors", color=color_error
+            budgets,
+            errors,
+            marker="s",
+            linestyle="-",
+            label="Optimized Relative Errors",
+            color=color_error,
+            where="post",
         )
         if original_error is not None:
             line4 = ax2.axhline(y=original_error, color=color_error, linestyle="--", label="Original Relative Error")
@@ -632,7 +673,7 @@ def plot_results(
         pareto_front = np.array(pareto_front)
 
         (line_pareto,) = ax3.step(
-            pareto_front[:, 0], pareto_front[:, 1], linestyle="-", color="purple", label="Pareto Front"
+            pareto_front[:, 0], pareto_front[:, 1], linestyle="-", color="purple", label="Pareto Front", where="post"
         )
         ax3.set_yscale("log")
 
@@ -848,10 +889,8 @@ def analyze_all_data(tmp_dir, thresholds=None):
 
         if original_error == 0:
             example_digits = 17
-            # print(f"Original program of {prefix} has zero relative error! Using 17 digits of accuracy.")
         else:
-            example_digits = min(-math.log10(original_error / 100), 17)
-            # print(f"Original program of {prefix} has {example_digits:.2f} digits of accuracy.")
+            example_digits = min(-math.log10(original_error), 17)
 
         original_digits.append(example_digits)
 
@@ -859,11 +898,9 @@ def analyze_all_data(tmp_dir, thresholds=None):
         for err in errors:
             if err == 0:
                 digits_list.append(17)
-                # print(f"Optimized program of {prefix} has zero relative error! Using 17 digits of accuracy.")
             elif err is not None:
-                digits = min(-math.log10(err / 100), 17)
+                digits = min(-math.log10(err), 17)
                 digits_list.append(digits)
-                # print(f"Optimized program of {prefix} has {digits:.2f} digits of accuracy.")
             else:
                 digits_list.append(None)
 
@@ -888,17 +925,14 @@ def analyze_all_data(tmp_dir, thresholds=None):
         for threshold in thresholds:
             min_ratio = None
             for err, runtime in zip(errors, runtimes):
-                if err is not None and runtime is not None and err <= threshold * 100:
-                    # print(f"Threshold: {threshold}, Error: {err}, Runtime: {runtime}")
+                if err is not None and runtime is not None and err <= threshold:
                     runtime_ratio = runtime / original_runtime
                     if min_ratio is None or runtime_ratio < min_ratio:
                         min_ratio = runtime_ratio
             if min_ratio is not None:
                 min_runtime_ratios[threshold][prefix] = min_ratio
-                # print(f"Threshold: {threshold}, maximum runtime improvement for {prefix}: {(1 - min_ratio) * 100:.2f}%")
 
-    log_sum = sum(math.log1p(digits) for digits in original_digits)
-    geo_mean = math.expm1(log_sum / len(original_digits))
+    geo_mean = geomean(original_digits)
     print(f"Original programs have {geo_mean:.2f} decimal digits of accuracy on average.")
     print(f"Original programs have {max(original_digits):.2f} decimal digits of accuracy at most.")
 
@@ -906,24 +940,16 @@ def analyze_all_data(tmp_dir, thresholds=None):
     overall_runtime_improvements = {}
     for threshold in thresholds:
         ratios = min_runtime_ratios[threshold].values()
-        # print(f"\nThreshold: {threshold}, Number of valid runtime ratios: {len(ratios)}")
         if ratios:
-            log_sum = sum(math.log1p(min(1, ratio)) for ratio in ratios)
-            geo_mean_ratio = math.expm1(log_sum / len(ratios))
+            log_sum = sum(math.log(min(1, ratio)) for ratio in ratios)
+            geo_mean_ratio = math.exp(log_sum / len(ratios))
             percentage_improvement = (1 - geo_mean_ratio) * 100
             overall_runtime_improvements[threshold] = percentage_improvement
         else:
             overall_runtime_improvements[threshold] = None
 
-    # ratios1 = min_runtime_ratios[1e-06].keys()
-    # ratios2 = min_runtime_ratios[1e-04].keys()
-
-    # for i in ratios2:
-    #     if i not in ratios1:
-    #         print(i)
-
     # Print maximum accuracy improvements per benchmark
-    print("Maximum accuracy improvements (in number of bits) per benchmark:")
+    print("Maximum accuracy improvements (in number of digits) per benchmark:")
     for prefix in prefixes:
         improvement = max_accuracy_improvements.get(prefix)
         if improvement:
@@ -941,8 +967,8 @@ def analyze_all_data(tmp_dir, thresholds=None):
     else:
         try:
             log_sum = sum(math.log(impr) for impr in positive_improvements)
-            geo_mean = math.exp(log_sum / len(positive_improvements))
-            print(f"\nGeometric mean of maximum accuracy improvements: {geo_mean:.2f} decimal digits")
+            geo_mean_improvement = math.exp(log_sum / len(positive_improvements))
+            print(f"\nGeometric mean of maximum accuracy improvements: {geo_mean_improvement:.2f} decimal digits")
         except ValueError as e:
             print(f"\nError in computing geometric mean: {e}")
 
@@ -954,6 +980,44 @@ def analyze_all_data(tmp_dir, thresholds=None):
             print(f"Allowed relative error ≤ {threshold}: {percentage_improvement:.2f}% runtime improvement")
         else:
             print(f"Allowed relative error ≤ {threshold}: No data")
+
+    # --- New Section: Geometric Mean of Relative Errors ---
+    # We'll compute:
+    # 1. The geometric mean of the original relative errors (from data["original_error"])
+    # 2. The geometric mean of the minimum achievable optimized relative errors (the smallest non-None, positive error from data["errors"])
+
+    original_errors = []
+    min_optimized_errors = []
+
+    for prefix, data in data_list:
+        orig_err = data["original_error"]
+        if orig_err is not None and orig_err > 0:
+            original_errors.append(orig_err)
+        # For optimized errors, consider all non-None and positive errors
+        valid_optimized_errors = [err for err in data["errors"] if err is not None and err > 0]
+        if valid_optimized_errors:
+            min_optimized_errors.append(min(valid_optimized_errors))
+
+    def compute_geomean(values):
+        if not values:
+            return None
+        # If any value is zero, the geometric mean is zero.
+        if any(v == 0 for v in values):
+            return 0.0
+        return math.exp(sum(math.log(v) for v in values) / len(values))
+
+    geo_mean_original_error = compute_geomean(original_errors)
+    geo_mean_min_optimized_error = compute_geomean(min_optimized_errors)
+
+    if geo_mean_original_error is not None:
+        print(f"\nGeometric mean of original relative errors: {geo_mean_original_error:.2e}")
+    else:
+        print("\nNo original relative errors available to compute geometric mean.")
+
+    if geo_mean_min_optimized_error is not None:
+        print(f"Geometric mean of minimum achievable optimized relative errors: {geo_mean_min_optimized_error:.2e}")
+    else:
+        print("No optimized relative errors available to compute geometric mean.")
 
 
 def build_with_benchmark(tmp_dir, logs_dir, plots_dir, prefix, num_parallel=1):

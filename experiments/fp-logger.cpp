@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cassert>
 #include <cmath>
 #include <fstream>
@@ -6,9 +7,62 @@
 #include <limits>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
-#include "fp-logger.hpp"
+// https://arxiv.org/pdf/1806.06403
+double geomean(const std::vector<double> &dataset, double epsilon = 1e-5) {
+  std::vector<double> dataset_nozeros;
+  for (double x : dataset) {
+    if (x > 0.0)
+      dataset_nozeros.push_back(x);
+  }
+
+  if (dataset_nozeros.empty()) {
+    return 0.0;
+  }
+
+  double sum_log = 0.0;
+  for (double x : dataset_nozeros) {
+    sum_log += std::log(x);
+  }
+  double geomeanNozeros = std::exp(sum_log / dataset_nozeros.size());
+
+  double min_val =
+      *std::min_element(dataset_nozeros.begin(), dataset_nozeros.end());
+  double deltamin = 0.0;
+  double deltamax = std::max(geomeanNozeros - min_val, 0.0);
+  double delta = (deltamin + deltamax) / 2.0;
+  double epsilon_threshold = epsilon * geomeanNozeros;
+
+  auto compute_auxExp = [&](double d) -> double {
+    double sum = 0.0;
+    for (double x : dataset_nozeros) {
+      sum += std::log(x + d);
+    }
+    return std::exp(sum / dataset_nozeros.size()) - d;
+  };
+
+  double auxExp = compute_auxExp(delta);
+
+  while ((auxExp - geomeanNozeros) > epsilon_threshold) {
+    if (auxExp < geomeanNozeros)
+      deltamin = delta;
+    else
+      deltamax = delta;
+    delta = (deltamin + deltamax) / 2.0;
+    auxExp = compute_auxExp(delta);
+  }
+
+  double sum_log_all = 0.0;
+  for (double x : dataset) {
+    sum_log_all += std::log(x + delta);
+  }
+  double gmeanE = std::exp(sum_log_all / dataset.size()) - delta;
+
+  assert(!std::isnan(gmeanE) && !std::isinf(gmeanE));
+  return gmeanE;
+}
 
 class ValueInfo {
 public:
@@ -17,8 +71,7 @@ public:
   std::vector<double> minOperands;
   std::vector<double> maxOperands;
   unsigned executions = 0;
-  double logSum = 0.0;
-  unsigned logCount = 0;
+  std::vector<double> loggedValues;
 
   void update(double res, const double *operands, unsigned numOperands) {
     minRes = std::min(minRes, res);
@@ -33,17 +86,17 @@ public:
     }
     ++executions;
 
-    if (!std::isnan(res)) {
-      logSum += std::log1p(std::fabs(res));
-      ++logCount;
+    if (!std::isnan(res) && !std::isinf(res)) {
+      loggedValues.push_back(std::fabs(res));
     }
   }
 
-  double getGeometricAverage() const {
-    if (logCount == 0) {
-      return 0.;
+  double getGeomean() const {
+    if (loggedValues.empty()) {
+      return 0.0;
     }
-    return std::expm1(logSum / logCount);
+
+    return geomean(loggedValues);
   }
 };
 
@@ -60,21 +113,20 @@ public:
 
 class GradInfo {
 public:
-  double logSum = 0.0;
-  unsigned count = 0;
+  std::vector<double> loggedValues;
 
   void update(double grad) {
-    if (!std::isnan(grad)) {
-      logSum += std::log1p(std::fabs(grad));
-      ++count;
+    if (!std::isnan(grad) && !std::isinf(grad)) {
+      loggedValues.push_back(std::fabs(grad));
     }
   }
 
-  double getGeometricAverage() const {
-    if (count == 0) {
-      return 0.;
+  double getGeomean() const {
+    if (loggedValues.empty()) {
+      return 0.0;
     }
-    return std::expm1(logSum / count);
+
+    return geomean(loggedValues);
   }
 };
 
@@ -112,27 +164,18 @@ public:
       std::cout << "\tMinRes = " << info.minRes << "\n";
       std::cout << "\tMaxRes = " << info.maxRes << "\n";
       std::cout << "\tExecutions = " << info.executions << "\n";
-      std::cout << "\tGeometric Average = " << info.getGeometricAverage()
-                << "\n";
+      std::cout << "\tGeometric Average = " << info.getGeomean() << "\n";
       for (unsigned i = 0; i < info.minOperands.size(); ++i) {
         std::cout << "\tOperand[" << i << "] = [" << info.minOperands[i] << ", "
                   << info.maxOperands[i] << "]\n";
       }
     }
 
-    for (const auto &pair : errorInfo) {
-      const auto &id = pair.first;
-      const auto &info = pair.second;
-      std::cout << "Error:" << id << "\n";
-      std::cout << "\tMinErr = " << info.minErr << "\n";
-      std::cout << "\tMaxErr = " << info.maxErr << "\n";
-    }
-
     for (const auto &pair : gradInfo) {
       const auto &id = pair.first;
       const auto &info = pair.second;
       std::cout << "Grad:" << id << "\n";
-      std::cout << "\tGrad = " << info.getGeometricAverage() << "\n";
+      std::cout << "\tGrad = " << info.getGeomean() << "\n";
     }
   }
 };
