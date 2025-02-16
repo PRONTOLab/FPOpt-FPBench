@@ -20,8 +20,8 @@ from matplotlib import rcParams
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
 HOME = "/home/sbrantq"
-ENZYME_PATH = os.path.join(HOME, "sync/Enzyme/build-debug/Enzyme/ClangEnzyme-16.so")
-LLVM_PATH = os.path.join(HOME, "llvms/llvm16/build/bin")
+ENZYME_PATH = os.path.join(HOME, "sync/Enzyme/build-release/Enzyme/ClangEnzyme-16.so")
+LLVM_PATH = os.path.join(HOME, "llvms/llvm16/build-release/bin")
 CXX = os.path.join(LLVM_PATH, "clang++")
 
 CXXFLAGS = [
@@ -81,34 +81,26 @@ LOG_NUM_SAMPLES = 10000
 MAX_TESTED_COSTS = 999
 
 
-# https://arxiv.org/pdf/1806.06403
-def geomean(dataset):
-    dataset = np.array(dataset)
-    epsilon = 1e-5
+def geomean(values, epsilon=1e-5):
+    sum_log = 0.0
+    count_nonzero = 0
+    count_zero = 0
+    min_nonzero = float("inf")
 
-    dataset_nozeros = dataset[dataset > 0]
+    for x in values:
+        if x > 0:
+            sum_log += math.log(x)
+            count_nonzero += 1
+            min_nonzero = min(min_nonzero, x)
+        else:
+            count_zero += 1
 
-    if len(dataset_nozeros) == 0:
+    total = count_nonzero + count_zero
+    if total == 0 or count_nonzero == 0:
         return 0.0
 
-    geomeanNozeros = ssm.gmean(dataset_nozeros)
-
-    deltamin = 0
-    deltamax = geomeanNozeros - min(dataset_nozeros)
-    delta = (deltamin + deltamax) / 2
-
-    epsilon = epsilon * geomeanNozeros
-    auxExp = math.exp(np.mean(np.log(dataset_nozeros + delta))) - delta
-    while (auxExp - geomeanNozeros) > epsilon:
-        if auxExp < geomeanNozeros:
-            deltamin = delta
-        else:
-            deltamax = delta
-        delta = (deltamin + deltamax) / 2
-        auxExp = math.exp(np.mean(np.log(dataset_nozeros + delta))) - delta
-
-    gmeanE = math.exp(np.mean(np.log(dataset + delta))) - delta
-    return gmeanE
+    eps = min_nonzero * epsilon
+    return math.exp((sum_log + count_zero * math.log(eps)) / total)
 
 
 def run_command(command, description, capture_output=False, output_file=None, verbose=True, timeout=None):
@@ -255,37 +247,31 @@ def compile_example_fpopt_exe(tmp_dir, prefix, fpoptflags, output="example-fpopt
         )
 
 
-def parse_critical_comp_costs(tmp_dir, prefix, log_path="compile_fpopt.log"):
-    print(f"=== Parsing critical computation costs from {log_path} ===")
-    full_log_path = os.path.join("logs", f"{prefix}{log_path}")
-    if not os.path.exists(full_log_path):
-        print(f"Log file {full_log_path} does not exist.")
+def parse_critical_comp_costs(tmp_dir, prefix):
+    budgets_file = os.path.join("cache", "budgets.txt")
+    print(f"=== Reading critical computation costs from {budgets_file} ===")
+    if not os.path.exists(budgets_file):
+        print(f"Budgets file {budgets_file} does not exist.")
         sys.exit(1)
-    with open(full_log_path, "r") as f:
-        content = f.read()
-
-    pattern = r"\*\*\* Critical Computation Costs \*\*\*(.*?)\*\*\* End of Critical Computation Costs \*\*\*"
-    match = re.search(pattern, content, re.DOTALL)
-    if not match:
-        print("Critical Computation Costs block not found in the log.")
+    with open(budgets_file, "r") as f:
+        content = f.read().strip()
+    if not content:
+        print(f"Budgets file {budgets_file} is empty.")
         sys.exit(1)
-
-    costs_str = match.group(1).strip()
-    costs = [int(cost) for cost in costs_str.split(",") if re.fullmatch(r"-?\d+", cost.strip())]
-    print(f"Parsed computation costs: {costs}")
-
+    try:
+        # Convert each comma-separated value to an integer
+        costs = [int(cost.strip()) for cost in content.split(",") if cost.strip() != ""]
+    except ValueError as e:
+        print(f"Error parsing budgets from file {budgets_file}: {e}")
+        sys.exit(1)
+    print(f"Read computation costs: {costs}")
     if not costs:
-        print("No valid computation costs found to sample.")
+        print("No valid computation costs found in budgets.txt.")
         sys.exit(1)
-
     num_to_sample = min(MAX_TESTED_COSTS, len(costs))
-
     sampled_costs = random.sample(costs, num_to_sample)
-
     sampled_costs_sorted = sorted(sampled_costs)
-
     print(f"Sampled computation costs (sorted): {sampled_costs_sorted}")
-
     return sampled_costs_sorted
 
 
@@ -645,7 +631,7 @@ def plot_results(
 
         # Second Plot: Pareto Front of Optimized Programs
         ax3.set_xlabel("Runtimes (seconds)")
-        ax3.set_ylabel("Relative Errors (%)")
+        ax3.set_ylabel("Relative Errors")
         ax3.set_title(f"Pareto Front of Optimized Programs ({prefix[:-1]})")
 
         scatter1 = ax3.scatter(runtimes, errors, label="Optimized Programs", color="blue")
