@@ -139,6 +139,17 @@ def clean(tmp_dir, logs_dir, plots_dir):
             print(f"Removed directory: {directory}")
 
 
+def clean_tmp_except_pkl(tmp_dir):
+    for entry in os.listdir(tmp_dir):
+        full_path = os.path.join(tmp_dir, entry)
+        if os.path.isfile(full_path) and not full_path.endswith(".pkl"):
+            os.remove(full_path)
+            print(f"Removed file: {full_path}")
+        elif os.path.isdir(full_path):
+            shutil.rmtree(full_path)
+            print(f"Removed directory: {full_path}")
+
+
 def generate_example_cpp(tmp_dir, prefix):
     script = "fpopt-original-driver-generator.py"
     print(f"=== Running {script} ===")
@@ -1060,6 +1071,7 @@ def main():
         sys.exit(0)
     elif args.benchmark:
         benchmark(tmp_dir, logs_dir, prefix, plots_dir, num_parallel=args.num_parallel)
+        clean_tmp_except_pkl(tmp_dir)
         sys.exit(0)
     elif args.plot_only:
         plot_from_data(tmp_dir, plots_dir, prefix, output_format=args.output_format)
@@ -1069,9 +1081,11 @@ def main():
         sys.exit(0)
     elif args.all:
         build_with_benchmark(tmp_dir, logs_dir, plots_dir, prefix, num_parallel=args.num_parallel)
+        clean_tmp_except_pkl(tmp_dir)
         sys.exit(0)
     else:
         build_with_benchmark(tmp_dir, logs_dir, plots_dir, prefix, num_parallel=args.num_parallel)
+        clean_tmp_except_pkl(tmp_dir)
 
 
 if __name__ == "__main__":
