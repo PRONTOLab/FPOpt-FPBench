@@ -81,26 +81,20 @@ LOG_NUM_SAMPLES = 10000
 MAX_TESTED_COSTS = 999
 
 
-def geomean(values, epsilon=1e-5):
+def geomean(values):
+    assert len(values) > 0, "Cannot compute geometric mean of an empty list"
     sum_log = 0.0
-    count_nonzero = 0
-    count_zero = 0
-    min_nonzero = float("inf")
+    nonzero_count = 0
 
     for x in values:
-        if x > 0:
+        if x != 0:
             sum_log += math.log(x)
-            count_nonzero += 1
-            min_nonzero = min(min_nonzero, x)
-        else:
-            count_zero += 1
+            nonzero_count += 1
 
-    total = count_nonzero + count_zero
-    if total == 0 or count_nonzero == 0:
+    if nonzero_count == 0:
         return 0.0
 
-    eps = min_nonzero * epsilon
-    return math.exp((sum_log + count_zero * math.log(eps)) / total)
+    return math.exp(sum_log / nonzero_count)
 
 
 def run_command(command, description, capture_output=False, output_file=None, verbose=True, timeout=None):
@@ -270,7 +264,6 @@ def parse_critical_comp_costs(tmp_dir, prefix):
         print(f"Budgets file {budgets_file} is empty.")
         sys.exit(1)
     try:
-        # Convert each comma-separated value to an integer
         costs = [int(cost.strip()) for cost in content.split(",") if cost.strip() != ""]
     except ValueError as e:
         print(f"Error parsing budgets from file {budgets_file}: {e}")
@@ -411,7 +404,7 @@ def get_avg_rel_error(tmp_dir, prefix, golden_values_file, binaries):
                 continue
             if g == 0:
                 continue
-            error = abs((v - g) / g)
+            error = max(abs((v - g) / g), abs(math.ulp(g) / g))
             valid_errors.append(error)
 
         if not valid_errors:
@@ -854,6 +847,7 @@ def analyze_all_data(tmp_dir, thresholds=None):
     prefixes = []
     data_list = []
 
+    # Load all benchmark data files
     for filename in os.listdir(tmp_dir):
         if filename.endswith("benchmark_data.pkl"):
             data_file = os.path.join(tmp_dir, filename)
@@ -871,7 +865,31 @@ def analyze_all_data(tmp_dir, thresholds=None):
     print(f"Analyzing data for prefixes: {', '.join(prefixes)}\n")
 
     if thresholds is None:
-        thresholds = [0, 1e-10, 1e-9, 1e-8, 1e-6, 1e-4, 1e-2, 1e-1, 0.2, 0.3, 0.4, 0.5, 0.9, 1]
+        thresholds = [
+            0,
+            1e-15,
+            1e-14,
+            1e-13,
+            1e-12,
+            1e-11,
+            1e-10,
+            1e-9,
+            1e-8,
+            1e-7,
+            1e-6,
+            1e-5,
+            5e-5,
+            1e-4,
+            1e-3,
+            1e-2,
+            1e-1,
+            0.2,
+            0.3,
+            0.4,
+            0.5,
+            0.9,
+            1,
+        ]
 
     max_accuracy_improvements = {}  # Per benchmark
     min_runtime_ratios = {threshold: {} for threshold in thresholds}
@@ -884,40 +902,6 @@ def analyze_all_data(tmp_dir, thresholds=None):
         original_runtime = data["original_runtime"]
         original_error = data["original_error"]
 
-        if original_error == 0:
-            example_digits = 17
-        else:
-            example_digits = min(-math.log10(original_error), 17)
-
-        original_digits.append(example_digits)
-
-        digits_list = []
-        for err in errors:
-            if err == 0:
-                digits_list.append(17)
-            elif err is not None:
-                digits = min(-math.log10(err), 17)
-                digits_list.append(digits)
-            else:
-                digits_list.append(None)
-
-        accuracy_improvements = []
-        for digits in digits_list:
-            if digits is not None and example_digits is not None:
-                improvement = digits - example_digits
-                accuracy_improvements.append(improvement)
-            else:
-                accuracy_improvements.append(None)
-
-        # Find the maximum accuracy improvement for this benchmark
-        max_improvement = None
-        for improvement in accuracy_improvements:
-            if improvement is not None and improvement > 0:
-                if max_improvement is None or improvement > max_improvement:
-                    max_improvement = improvement
-
-        max_accuracy_improvements[prefix] = max_improvement or 0.0
-
         # For each threshold, find the minimum runtime ratio for this benchmark
         for threshold in thresholds:
             min_ratio = None
@@ -929,11 +913,6 @@ def analyze_all_data(tmp_dir, thresholds=None):
             if min_ratio is not None:
                 min_runtime_ratios[threshold][prefix] = min_ratio
 
-    geo_mean = geomean(original_digits)
-    print(f"Original programs have {geo_mean:.2f} decimal digits of accuracy on average.")
-    print(f"Original programs have {max(original_digits):.2f} decimal digits of accuracy at most.")
-
-    # Now compute the geometric mean of minimum runtime ratios per threshold
     overall_runtime_improvements = {}
     for threshold in thresholds:
         ratios = min_runtime_ratios[threshold].values()
@@ -945,76 +924,97 @@ def analyze_all_data(tmp_dir, thresholds=None):
         else:
             overall_runtime_improvements[threshold] = None
 
-    # Print maximum accuracy improvements per benchmark
-    print("Maximum accuracy improvements (in number of digits) per benchmark:")
-    for prefix in prefixes:
-        improvement = max_accuracy_improvements.get(prefix)
-        if improvement:
-            print(f"{prefix}: {improvement:.2f} decimal digits")
-        else:
-            print(f"{prefix}: No improvement")
-
-    improvements = list(max_accuracy_improvements.values())
-
-    # Compute geometric mean of maximum accuracy improvements
-    positive_improvements = [impr for impr in improvements if impr > 0]
-
-    if not positive_improvements:
-        print("\nNo positive accuracy improvements available to compute geometric mean.")
-    else:
-        try:
-            log_sum = sum(math.log(impr) for impr in positive_improvements)
-            geo_mean_improvement = math.exp(log_sum / len(positive_improvements))
-            print(f"\nGeometric mean of maximum accuracy improvements: {geo_mean_improvement:.2f} decimal digits")
-        except ValueError as e:
-            print(f"\nError in computing geometric mean: {e}")
-
-    # Print overall runtime improvements per threshold
     print("\nGeometric average percentage of runtime improvements while allowing some level of relative error:")
     for threshold in thresholds:
         percentage_improvement = overall_runtime_improvements[threshold]
         if percentage_improvement is not None:
-            print(f"Allowed relative error ≤ {threshold}: {percentage_improvement:.2f}% runtime improvement")
+            print(
+                f"Allowed relative error ≤ {threshold} ({len(min_runtime_ratios[threshold])} benchmarks): "
+                f"{percentage_improvement:.2f}% runtime reduction / {1 / (1 - percentage_improvement / 100):.2f}x average speedup"
+            )
         else:
             print(f"Allowed relative error ≤ {threshold}: No data")
 
-    # --- New Section: Geometric Mean of Relative Errors ---
-    # We'll compute:
-    # 1. The geometric mean of the original relative errors (from data["original_error"])
-    # 2. The geometric mean of the minimum achievable optimized relative errors (the smallest non-None, positive error from data["errors"])
+    max_speedups = {}
+    max_speedup_prefixes = {}
+    for threshold in thresholds:
+        if min_runtime_ratios[threshold]:
+            best_prefix = min(min_runtime_ratios[threshold], key=min_runtime_ratios[threshold].get)
+            best_ratio = min_runtime_ratios[threshold][best_prefix]
+            max_speedup = 1 / best_ratio if best_ratio > 0 else float("inf")
+            max_speedups[threshold] = max_speedup
+            max_speedup_prefixes[threshold] = best_prefix
+        else:
+            max_speedups[threshold] = None
+            max_speedup_prefixes[threshold] = None
 
-    original_errors = []
-    min_optimized_errors = []
+    print("\nMaximum speedup on a single benchmark for each threshold:")
+    for threshold in thresholds:
+        prefix = max_speedup_prefixes[threshold]
+        if prefix is not None:
+            print(f"Allowed relative error ≤ {threshold}: {max_speedups[threshold]:.2f}x speedup ({prefix})")
+        else:
+            print(f"Allowed relative error ≤ {threshold}: No data")
+
+    max_accuracy_improvement_ratio = 0.0
+    max_accuracy_improvement_prefix = None
+    better_accuracy_count = 0
 
     for prefix, data in data_list:
         orig_err = data["original_error"]
-        if orig_err is not None and orig_err > 0:
-            original_errors.append(orig_err)
-        # For optimized errors, consider all non-None and positive errors
+        # Consider only positive non-None errors
         valid_optimized_errors = [err for err in data["errors"] if err is not None and err > 0]
-        if valid_optimized_errors:
-            min_optimized_errors.append(min(valid_optimized_errors))
+        if valid_optimized_errors and orig_err is not None:
+            best_optimized_error = min(valid_optimized_errors)
+            if best_optimized_error < orig_err:
+                better_accuracy_count += 1
+                improvement_ratio = orig_err / best_optimized_error
+                if improvement_ratio > max_accuracy_improvement_ratio:
+                    max_accuracy_improvement_ratio = improvement_ratio
+                    max_accuracy_improvement_prefix = prefix
 
-    def compute_geomean(values):
-        if not values:
-            return None
-        # If any value is zero, the geometric mean is zero.
-        if any(v == 0 for v in values):
-            return 0.0
-        return math.exp(sum(math.log(v) for v in values) / len(values))
-
-    geo_mean_original_error = compute_geomean(original_errors)
-    geo_mean_min_optimized_error = compute_geomean(min_optimized_errors)
-
-    if geo_mean_original_error is not None:
-        print(f"\nGeometric mean of original relative errors: {geo_mean_original_error:.2e}")
+    if max_accuracy_improvement_prefix is not None:
+        print(
+            f"\nMaximum accuracy improvement ratio: {max_accuracy_improvement_ratio:.2f}x (in benchmark: {max_accuracy_improvement_prefix})"
+        )
     else:
-        print("\nNo original relative errors available to compute geometric mean.")
+        print("\nNo accuracy improvements found.")
 
-    if geo_mean_min_optimized_error is not None:
-        print(f"Geometric mean of minimum achievable optimized relative errors: {geo_mean_min_optimized_error:.2e}")
+    print(f"\nNumber of benchmarks where we can get better accuracy: {better_accuracy_count}")
+
+    # Geometric mean of original relative errors
+    original_errors = [
+        data["original_error"]
+        for _, data in data_list
+        if data["original_error"] is not None and data["original_error"] > 0
+    ]
+
+    if original_errors:
+        log_sum = sum(math.log(err) for err in original_errors)
+        geomean_error = math.exp(log_sum / len(original_errors))
+        print("Geometric mean of original relative errors:", geomean_error)
     else:
-        print("No optimized relative errors available to compute geometric mean.")
+        print("No valid original errors found.")
+
+    # Compute the geometric mean of error reduction ratios
+    reduction_ratios = []
+    for prefix, data in data_list:
+        orig_err = data["original_error"]
+        valid_optimized_errors = [err for err in data["errors"] if err is not None and err > 0]
+        if valid_optimized_errors and orig_err is not None and orig_err > 0:
+            best_optimized_error = min(valid_optimized_errors)
+            if best_optimized_error < orig_err:
+                reduction_ratio = best_optimized_error / orig_err
+                reduction_ratios.append(reduction_ratio)
+
+    if reduction_ratios:
+        log_sum = sum(math.log(ratio) for ratio in reduction_ratios)
+        geomean_reduction = math.exp(log_sum / len(reduction_ratios))
+        improvement_factor = 1 / geomean_reduction
+        print("\nGeometric mean of error reduction:", geomean_reduction)
+        print("Average improvement factor in error:", improvement_factor, "x")
+    else:
+        print("\nNo error improvements found.")
 
 
 def build_with_benchmark(tmp_dir, logs_dir, plots_dir, prefix, num_parallel=1):

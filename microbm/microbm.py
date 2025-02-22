@@ -59,6 +59,7 @@ def float64_to_fp80_bytes(value: np.float64) -> bytes:
     sign = (bits >> 63) & 0x1
     exponent = (bits >> 52) & 0x7FF
     mantissa = bits & 0xFFFFFFFFFFFFF
+
     if exponent == 0:
         if mantissa == 0:
             fp80_exponent = 0
@@ -84,6 +85,7 @@ def float64_to_fp80_bytes(value: np.float64) -> bytes:
         exponent_bias_80 = 16383
         fp80_exponent = exponent - exponent_bias_64 + exponent_bias_80
         fp80_mantissa = (0x8000000000000000) | (mantissa << (63 - 52))
+
     exponent_sign = (sign << 15) | fp80_exponent
     fp80_bits = (exponent_sign << 64) | fp80_mantissa
     fp80_bytes = fp80_bits.to_bytes(10, byteorder="big")
@@ -96,6 +98,7 @@ def float64_to_fp128_bytes(value: np.float64) -> bytes:
     sign = (bits >> 63) & 0x1
     exponent = (bits >> 52) & 0x7FF
     mantissa = bits & 0xFFFFFFFFFFFFF
+
     if exponent == 0:
         fp128_exponent = 0
     elif exponent == 0x7FF:
@@ -104,6 +107,7 @@ def float64_to_fp128_bytes(value: np.float64) -> bytes:
         exponent_bias_64 = 1023
         exponent_bias_128 = 16383
         fp128_exponent = exponent - exponent_bias_64 + exponent_bias_128
+
     fp128_mantissa = mantissa << 60
     fp128_bits = (sign << 127) | (fp128_exponent << 112) | fp128_mantissa
     fp128_bytes = fp128_bits.to_bytes(16, byteorder="big")
@@ -180,6 +184,7 @@ OP_INFO = {
     "fpext": {"llvm_instr": "fpext", "num_operands": 1, "kind": "cast"},
 }
 
+# Added "powi" entry below (with num_operands=2 and the intrinsic "llvm.powi")
 FUNC_INFO = {
     "fmuladd": {"intrinsic": "llvm.fmuladd", "num_operands": 3},
     "sin": {"intrinsic": "llvm.sin", "num_operands": 1},
@@ -222,6 +227,7 @@ FUNC_INFO = {
     "lgamma": {"intrinsic": None, "num_operands": 1},
     "tgamma": {"intrinsic": None, "num_operands": 1},
     "remainder": {"intrinsic": None, "num_operands": 2},
+    "powi": {"intrinsic": "llvm.powi", "num_operands": 2},  # <--- New entry
 }
 
 
@@ -272,12 +278,16 @@ def generate_arithmetic_op_code(op_key, precision, iterations):
         for _ in range(op_info["num_operands"]):
             f_val = generate_random_fp(precision)
             operands.append(float_to_llvm_hex(f_val, precision))
+
         if op_info["num_operands"] == 1:
             line = f"  %result{idx} = {op_info['llvm_instr']} {FAST_MATH_FLAG} {llvm_type} {operands[0]}"
+            body_lines += line + "\n"
+            body_lines += f"  %acc_val{idx+1} = fadd {FAST_MATH_FLAG} {llvm_type} %acc_val{idx}, %result{idx}\n"
         elif op_info["num_operands"] == 2:
             line = f"  %result{idx} = {op_info['llvm_instr']} {FAST_MATH_FLAG} {llvm_type} {operands[0]}, {operands[1]}"
-        body_lines += line + "\n"
-        body_lines += f"  %acc_val{idx+1} = fadd {FAST_MATH_FLAG} {llvm_type} %acc_val{idx}, %result{idx}\n"
+            body_lines += line + "\n"
+            body_lines += f"  %acc_val{idx+1} = fadd {FAST_MATH_FLAG} {llvm_type} %acc_val{idx}, %result{idx}\n"
+
     final_acc = f"%acc_val{unrolled}"
     return generate_loop_code(llvm_type, iterations, body_lines, final_acc)
 
@@ -285,6 +295,7 @@ def generate_arithmetic_op_code(op_key, precision, iterations):
 def generate_compare_op_code(precision, iterations):
     """Generate LLVM IR for an fcmp (comparison) operation."""
     llvm_type = precision_to_llvm_type[precision]
+
     body_lines = ""
     for idx in range(unrolled):
         f_a = generate_random_fp(precision)
@@ -294,10 +305,7 @@ def generate_compare_op_code(precision, iterations):
         line = f"  %cmp{idx} = fcmp {FAST_MATH_FLAG} olt {llvm_type} {a_hex}, {b_hex}"
         body_lines += line + "\n"
         body_lines += f"  %cmp_int{idx} = zext i1 %cmp{idx} to i32\n"
-    body_lines += "  %acc_val0 = load i32, i32* %acc\n"
-    for idx in range(unrolled):
-        body_lines += f"  %acc_val{idx+1} = add i32 %acc_val{idx}, %cmp_int{idx}\n"
-    final_acc = f"%acc_val{unrolled}"
+
     code = f"""
 define i32 @main() optnone noinline {{
 entry:
@@ -313,7 +321,15 @@ loop:
   br i1 %cond, label %body, label %exit
 
 body:
+  %acc_val0 = load i32, i32* %acc
 {body_lines}
+"""
+
+    for idx in range(unrolled):
+        code += f"  %acc_val{idx+1} = add i32 %acc_val{idx}, %cmp_int{idx}\n"
+
+    final_acc = f"%acc_val{unrolled}"
+    code += f"""
   store i32 {final_acc}, i32* %acc
   %i_next = add i32 %i_val, 1
   store i32 %i_next, i32* %i
@@ -338,6 +354,7 @@ def generate_cast_op_code(op_key, src_precision, dst_precision, iterations):
     src_type = precision_to_llvm_type[src_precision]
     dst_type = precision_to_llvm_type[dst_precision]
     zero_literal = get_zero_literal(dst_precision)
+
     body_lines = ""
     for idx in range(unrolled):
         f_val = generate_random_fp(src_precision)
@@ -345,6 +362,7 @@ def generate_cast_op_code(op_key, src_precision, dst_precision, iterations):
         line = f"  %result{idx} = {op_info['llvm_instr']} {src_type} {hex_val} to {dst_type}"
         body_lines += line + "\n"
         body_lines += f"  %acc_val{idx+1} = fadd {FAST_MATH_FLAG} {dst_type} %acc_val{idx}, %result{idx}\n"
+
     final_acc = f"%acc_val{unrolled}"
     code = f"""
 define i32 @main() optnone noinline {{
@@ -383,31 +401,54 @@ define void @use({dst_type} %val) {{
 
 def generate_function_call_code(func_name, precision, iterations):
     """Generate LLVM IR for a function call based on FUNC_INFO."""
+
     func_info = FUNC_INFO[func_name]
     llvm_type = precision_to_llvm_type[precision]
     intrinsic_suffix = precision_to_intrinsic_suffix.get(precision, "")
+
     if func_info["intrinsic"]:
         fn = f"{func_info['intrinsic']}.{intrinsic_suffix}"
     else:
         fn = func_name
+
     num_operands = func_info["num_operands"]
-    body_lines = ""
+
+    body_lines = "  %acc_val0 = load " + llvm_type + ", " + llvm_type + "* %acc\n"
+
     for idx in range(unrolled):
-        operands = []
-        for _ in range(num_operands):
+        if func_name == "powi":
             f_val = generate_random_fp(precision)
-            operands.append(float_to_llvm_hex(f_val, precision))
-        if num_operands == 1:
-            call_str = f"call {FAST_MATH_FLAG} {llvm_type} @{fn}({llvm_type} {operands[0]})"
-        elif num_operands == 2:
-            call_str = f"call {FAST_MATH_FLAG} {llvm_type} @{fn}({llvm_type} {operands[0]}, {llvm_type} {operands[1]})"
-        elif num_operands == 3:
-            call_str = f"call {FAST_MATH_FLAG} {llvm_type} @{fn}({llvm_type} {operands[0]}, {llvm_type} {operands[1]}, {llvm_type} {operands[2]})"
+            i_val = random.randint(-10, 10)
+            f_hex = float_to_llvm_hex(f_val, precision)
+            line = f"  %result{idx} = call {FAST_MATH_FLAG} {llvm_type} @{fn}(" f"{llvm_type} {f_hex}, i32 {i_val})"
+            body_lines += line + "\n"
+            body_lines += f"  %acc_val{idx+1} = fadd {FAST_MATH_FLAG} {llvm_type} %acc_val{idx}, %result{idx}\n"
         else:
-            call_str = ""
-        body_lines += f"  %result{idx} = {call_str}\n"
-        body_lines += f"  %acc_val{idx+1} = fadd {FAST_MATH_FLAG} {llvm_type} %acc_val{idx}, %result{idx}\n"
-    decl = f"declare {llvm_type} @{fn}({', '.join([llvm_type]*num_operands)})"
+            operands = []
+            for _ in range(num_operands):
+                f_val = generate_random_fp(precision)
+                operands.append(float_to_llvm_hex(f_val, precision))
+
+            if num_operands == 1:
+                call_str = f"call {FAST_MATH_FLAG} {llvm_type} @{fn}({llvm_type} {operands[0]})"
+            elif num_operands == 2:
+                call_str = (
+                    f"call {FAST_MATH_FLAG} {llvm_type} @{fn}({llvm_type} {operands[0]}, {llvm_type} {operands[1]})"
+                )
+            elif num_operands == 3:
+                call_str = f"call {FAST_MATH_FLAG} {llvm_type} @{fn}({llvm_type} {operands[0]}, {llvm_type} {operands[1]}, {llvm_type} {operands[2]})"
+            else:
+                call_str = ""
+
+            body_lines += f"  %result{idx} = {call_str}\n"
+            body_lines += f"  %acc_val{idx+1} = fadd {FAST_MATH_FLAG} {llvm_type} %acc_val{idx}, %result{idx}\n"
+
+    if func_name == "powi":
+        decl = f"declare {llvm_type} @{fn}({llvm_type}, i32)"
+    else:
+        arg_types = ", ".join([llvm_type] * num_operands)
+        decl = f"declare {llvm_type} @{fn}({arg_types})"
+
     code = f"""
 {decl}
 define i32 @main() optnone noinline {{
@@ -424,7 +465,6 @@ loop:
   br i1 %cond, label %body, label %exit
 
 body:
-  %acc_val0 = load {llvm_type}, {llvm_type}* %acc
 {body_lines}
   store {llvm_type} %acc_val{unrolled}, {llvm_type}* %acc
   %i_next = add i32 %i_val, 1
@@ -482,68 +522,95 @@ def run_llvm_ir_jit(llvm_ir):
     mod.verify()
     engine.add_module(mod)
     engine.finalize_object()
+
     func_ptr = engine.get_function_address("main")
     cfunc = ctypes.CFUNCTYPE(ctypes.c_int)(func_ptr)
+
     start = time.perf_counter()
     retval = cfunc()
     end = time.perf_counter()
+
     print(f"DEBUG: JIT-execution time: {end - start:.6f}s")
     return (end - start), retval
 
 
-csv_file = "results.csv"
-with open(csv_file, "w", newline="") as csvfile:
-    fieldnames = ["instruction", "precision", "cost"]
-    writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+if __name__ == "__main__":
+    csv_file = "results.csv"
+    with open(csv_file, "w", newline="") as csvfile:
+        fieldnames = ["instruction", "precision", "cost"]
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
 
-    llvm_code = generate_baseline_code(iterations)
-    print("DEBUG: Running baseline")
-    baseline_time, _ = run_llvm_ir_jit(llvm_code)
+        llvm_code = generate_baseline_code(iterations)
+        print("DEBUG: Running baseline")
+        baseline_time, _ = run_llvm_ir_jit(llvm_code)
 
-    for precision in precisions:
-        for instr in OP_INFO:
-            op_kind = OP_INFO[instr]["kind"]
-            if op_kind == "cast":
-                src_precision = precision
-                src_rank = precision_ranks.get(src_precision)
-                if src_rank is None:
-                    continue
-                if instr == "fptrunc":
-                    dst_precisions = [
-                        p for p in precisions_ordered if p in precisions and precision_ranks[p] < src_rank
-                    ]
-                else:
-                    dst_precisions = [
-                        p for p in precisions_ordered if p in precisions and precision_ranks[p] > src_rank
-                    ]
-                for dst_precision in dst_precisions:
-                    if (src_precision, dst_precision) in [("half", "bf16"), ("bf16", "half")]:
+        for precision in precisions:
+            for instr in OP_INFO:
+                op_kind = OP_INFO[instr]["kind"]
+                if op_kind == "cast":
+                    src_precision = precision
+                    src_rank = precision_ranks.get(src_precision)
+                    if src_rank is None:
                         continue
-                    code = generate_cast_op_code(instr, src_precision, dst_precision, iterations)
-                    name = f"{instr}_{src_precision}_to_{dst_precision}"
-                    print(f"DEBUG: Running '{name}'")
-                    elapsed, _ = run_llvm_ir_jit(code)
-                    adjusted = (elapsed - baseline_time) * AMPLIFIER
-                    writer.writerow({"instruction": name, "precision": src_precision, "cost": int(adjusted)})
-            else:
-                if op_kind == "arithmetic":
-                    code = generate_arithmetic_op_code(instr, precision, iterations)
-                elif op_kind == "compare":
-                    code = generate_compare_op_code(precision, iterations)
+
+                    if instr == "fptrunc":
+                        dst_precisions = [
+                            p for p in precisions_ordered if p in precisions and precision_ranks[p] < src_rank
+                        ]
+                    else:
+                        dst_precisions = [
+                            p for p in precisions_ordered if p in precisions and precision_ranks[p] > src_rank
+                        ]
+
+                    for dst_precision in dst_precisions:
+                        if (src_precision, dst_precision) in [
+                            ("half", "bf16"),
+                            ("bf16", "half"),
+                        ]:
+                            continue
+                        code = generate_cast_op_code(instr, src_precision, dst_precision, iterations)
+                        name = f"{instr}_{src_precision}_to_{dst_precision}"
+                        print(f"DEBUG: Running '{name}'")
+                        elapsed, _ = run_llvm_ir_jit(code)
+                        adjusted = (elapsed - baseline_time) * AMPLIFIER
+                        writer.writerow(
+                            {
+                                "instruction": name,
+                                "precision": src_precision,
+                                "cost": int(adjusted),
+                            }
+                        )
                 else:
-                    code = ""
+                    if op_kind == "arithmetic":
+                        code = generate_arithmetic_op_code(instr, precision, iterations)
+                    elif op_kind == "compare":
+                        code = generate_compare_op_code(precision, iterations)
+                    else:
+                        code = ""
+                    if code.strip():
+                        print(f"DEBUG: Running '{instr}' at precision {precision}")
+                        elapsed, _ = run_llvm_ir_jit(code)
+                        adjusted = (elapsed - baseline_time) * AMPLIFIER
+                        writer.writerow(
+                            {
+                                "instruction": instr,
+                                "precision": precision,
+                                "cost": int(adjusted),
+                            }
+                        )
+
+            for func in FUNC_INFO:
+                code = generate_function_call_code(func, precision, iterations)
                 if code.strip():
-                    print(f"DEBUG: Running '{instr}' at precision {precision}")
+                    print(f"DEBUG: Running function '{func}' at precision {precision}")
                     elapsed, _ = run_llvm_ir_jit(code)
                     adjusted = (elapsed - baseline_time) * AMPLIFIER
-                    writer.writerow({"instruction": instr, "precision": precision, "cost": int(adjusted)})
+                    writer.writerow(
+                        {
+                            "instruction": func,
+                            "precision": precision,
+                            "cost": int(adjusted),
+                        }
+                    )
 
-        for func in FUNC_INFO:
-            code = generate_function_call_code(func, precision, iterations)
-            if code.strip():
-                print(f"DEBUG: Running function '{func}' at precision {precision}")
-                elapsed, _ = run_llvm_ir_jit(code)
-                adjusted = (elapsed - baseline_time) * AMPLIFIER
-                writer.writerow({"instruction": func, "precision": precision, "cost": int(adjusted)})
-
-print(f"Results in '{csv_file}'. Baseline: {baseline_time:.6f}s")
+    print(f"Results in '{csv_file}'. Baseline: {baseline_time:.6f}s")
