@@ -901,6 +901,13 @@ def analyze_all_data(tmp_dir, thresholds=None):
         errors = data["errors"]
         original_runtime = data["original_runtime"]
         original_error = data["original_error"]
+        # print(f"Analyzing {prefix}...")
+
+        # print(f"Original runtime: {original_runtime}")
+        # print(f"Original error: {original_error}")
+        # for budget, runtime, error in zip(budgets, runtimes, errors):
+        #     print(f"Budget: {budget}, Runtime: {runtime}, Error: {error}")
+        # print()
 
         # For each threshold, find the minimum runtime ratio for this benchmark
         for threshold in thresholds:
