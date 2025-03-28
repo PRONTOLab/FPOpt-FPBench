@@ -16,10 +16,11 @@ import pickle
 from tqdm import trange
 from matplotlib import rcParams
 from concurrent.futures import ProcessPoolExecutor, as_completed
+import seaborn as sns
 
 HOME = "/home/sbrantq"
-ENZYME_PATH = os.path.join(HOME, "sync/Enzyme/build-debug/Enzyme/ClangEnzyme-16.so")
-LLVM_PATH = os.path.join(HOME, "llvms/llvm16/build/bin")
+ENZYME_PATH = os.path.join(HOME, "sync/Enzyme/build-release/Enzyme/ClangEnzyme-16.so")
+LLVM_PATH = os.path.join(HOME, "llvms/llvm16/build-release/bin")
 CXX = os.path.join(LLVM_PATH, "clang++")
 
 CXXFLAGS = [
@@ -82,6 +83,22 @@ LOG_NUM_SAMPLES = 10000
 MAX_TESTED_COSTS = 999
 
 
+def geomean(values):
+    assert len(values) > 0, "Cannot compute geometric mean of an empty list"
+    sum_log = 0.0
+    nonzero_count = 0
+
+    for x in values:
+        if x != 0:
+            sum_log += math.log(x)
+            nonzero_count += 1
+
+    if nonzero_count == 0:
+        return 0.0
+
+    return math.exp(sum_log / nonzero_count)
+
+
 def run_command(command, description, capture_output=False, output_file=None, verbose=True, timeout=None):
     print(f"=== {description} ===")
     print("Running:", " ".join(command))
@@ -116,6 +133,17 @@ def clean(tmp_dir, logs_dir, plots_dir):
         if os.path.exists(directory):
             shutil.rmtree(directory)
             print(f"Removed directory: {directory}")
+
+
+def clean_tmp_except_pkl(tmp_dir):
+    for entry in os.listdir(tmp_dir):
+        full_path = os.path.join(tmp_dir, entry)
+        if os.path.isfile(full_path) and not full_path.endswith(".pkl"):
+            os.remove(full_path)
+            print(f"Removed file: {full_path}")
+        elif os.path.isdir(full_path):
+            shutil.rmtree(full_path)
+            print(f"Removed directory: {full_path}")
 
 
 def generate_example_cpp(tmp_dir, original_prefix, prefix):
@@ -204,37 +232,30 @@ def compile_example_fpopt_exe(tmp_dir, prefix, fpoptflags, output="example-fpopt
         )
 
 
-def parse_critical_comp_costs(tmp_dir, prefix, log_path="compile_fpopt.log"):
-    print(f"=== Parsing critical computation costs from {log_path} ===")
-    full_log_path = os.path.join("logs", f"{prefix}{log_path}")
-    if not os.path.exists(full_log_path):
-        print(f"Log file {full_log_path} does not exist.")
+def parse_critical_comp_costs(tmp_dir, prefix):
+    budgets_file = os.path.join("cache", "budgets.txt")
+    print(f"=== Reading critical computation costs from {budgets_file} ===")
+    if not os.path.exists(budgets_file):
+        print(f"Budgets file {budgets_file} does not exist.")
         sys.exit(1)
-    with open(full_log_path, "r") as f:
-        content = f.read()
-
-    pattern = r"\*\*\* Critical Computation Costs \*\*\*(.*?)\*\*\* End of Critical Computation Costs \*\*\*"
-    match = re.search(pattern, content, re.DOTALL)
-    if not match:
-        print("Critical Computation Costs block not found in the log.")
+    with open(budgets_file, "r") as f:
+        content = f.read().strip()
+    if not content:
+        print(f"Budgets file {budgets_file} is empty.")
         sys.exit(1)
-
-    costs_str = match.group(1).strip()
-    costs = [int(cost) for cost in costs_str.split(",") if re.fullmatch(r"-?\d+", cost.strip())]
-    print(f"Parsed computation costs: {costs}")
-
+    try:
+        costs = [int(cost.strip()) for cost in content.split(",") if cost.strip() != ""]
+    except ValueError as e:
+        print(f"Error parsing budgets from file {budgets_file}: {e}")
+        sys.exit(1)
+    print(f"Read computation costs: {costs}")
     if not costs:
-        print("No valid computation costs found to sample.")
+        print("No valid computation costs found in budgets.txt.")
         sys.exit(1)
-
     num_to_sample = min(MAX_TESTED_COSTS, len(costs))
-
     sampled_costs = random.sample(costs, num_to_sample)
-
     sampled_costs_sorted = sorted(sampled_costs)
-
     print(f"Sampled computation costs (sorted): {sampled_costs_sorted}")
-
     return sampled_costs_sorted
 
 
@@ -363,7 +384,7 @@ def get_avg_rel_error(tmp_dir, prefix, golden_values_file, binaries):
                 continue
             if g == 0:
                 continue
-            error = abs((v - g) / g) * 100
+            error = max(abs((v - g) / g), abs(math.ulp(g) / g))
             valid_errors.append(error)
 
         if not valid_errors:
@@ -372,9 +393,7 @@ def get_avg_rel_error(tmp_dir, prefix, golden_values_file, binaries):
             continue
 
         try:
-            log_sum = sum(math.log1p(e) for e in valid_errors)
-            geo_mean = math.expm1(log_sum / len(valid_errors))
-            errors[binary] = geo_mean
+            errors[binary] = geomean(valid_errors)
         except OverflowError:
             print(
                 f"Overflow error encountered while computing geometric mean for binary {binary}. Setting rel error to None."
@@ -551,7 +570,7 @@ def plot_ablation_results(tmp_dir, plots_dir, original_prefix, prefix, output_fo
     if show_prediction and any("predicted_data" in d for d in all_data.values()):
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(20, 8))
     else:
-        fig, ax1 = plt.subplots(1, 1, figsize=(10, 8))
+        fig, ax1 = plt.subplots(1, 1, figsize=(10, 6))
         ax2 = None
 
     # Extract original runtime/error from the first scenario
@@ -620,8 +639,8 @@ def plot_ablation_results(tmp_dir, plots_dir, original_prefix, prefix, output_fo
                     color=color,
                 )
 
-    ax1.set_xlabel("Runtimes (seconds)")
-    ax1.set_ylabel("Relative Errors (%)")
+    ax1.set_xlabel("Runtime (second)")
+    ax1.set_ylabel("Relative Error")
     ax1.set_title("Pareto Fronts for Different widen-range Values")
     ax1.set_yscale("symlog", linthresh=1e-15)
     ax1.set_ylim(bottom=0)
@@ -645,6 +664,7 @@ def plot_ablation_results(tmp_dir, plots_dir, original_prefix, prefix, output_fo
 def plot_ablation_results_cost_model(
     tmp_dir, plots_dir, original_prefix, prefix, output_format="png", show_prediction=False
 ):
+    # Load data from pickle file
     ablation_data_file = os.path.join(tmp_dir, f"{prefix}ablation-cost-model.pkl")
     if not os.path.exists(ablation_data_file):
         print(f"Ablation data file {ablation_data_file} does not exist. Cannot plot.")
@@ -656,17 +676,22 @@ def plot_ablation_results_cost_model(
         print("No data to plot.")
         sys.exit(1)
 
-    rcParams["font.size"] = 20
-    rcParams["axes.titlesize"] = 24
-    rcParams["axes.labelsize"] = 20
-    rcParams["xtick.labelsize"] = 18
+    sns.set_theme(style="whitegrid")
+    rcParams["text.usetex"] = True
+    rcParams["text.latex.preamble"] = r"\usepackage{libertine}\usepackage[libertine]{newtxmath}"
+    rcParams["font.family"] = "Linux Libertine"
+    rcParams["axes.labelsize"] = 24
+    rcParams["xtick.labelsize"] = 20
     rcParams["ytick.labelsize"] = 18
-    rcParams["legend.fontsize"] = 18
+    rcParams["legend.fontsize"] = 20
+    blue = "#2287E6"
+    yellow = "#FFBD59"
+    red = "#FF6666"
 
     if show_prediction and any("predicted_data" in d for d in all_data.values()):
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(20, 8))
     else:
-        fig, ax1 = plt.subplots(1, 1, figsize=(10, 8))
+        fig, ax1 = plt.subplots(1, 1, figsize=(10, 6))
         ax2 = None
 
     # Extract original runtime/error from the first scenario
@@ -674,15 +699,14 @@ def plot_ablation_results_cost_model(
     original_runtime = all_data[first_key]["original_runtime"]
     original_error = all_data[first_key]["original_error"]
 
-    # Plot original program once
-    ax1.scatter(original_runtime, original_error, marker="x", color="black", s=100, label="Original Program")
+    # Plot original program as a red upward triangle with legend "Original"
 
-    colors = ["blue", "green"]
-    labels = ["Custom Cost Model", "TTI Cost Model"]
+    colors = [blue, yellow]
+    labels = ["Instruction-JIT", "TTI"]
 
+    # Plot data for cost models
     for idx, key in enumerate(["with_cost_model", "without_cost_model"]):
         data = all_data[key]
-        budgets = data["budgets"]
         runtimes = data["runtimes"]
         errors = data["errors"]
 
@@ -693,7 +717,10 @@ def plot_ablation_results_cost_model(
             continue
         runtimes_filtered, errors_filtered = zip(*filtered_data)
         color = colors[idx]
-        ax1.scatter(runtimes_filtered, errors_filtered, label=labels[idx], color=color)
+        label = labels[idx]
+        marker = "*"
+
+        ax1.scatter(runtimes_filtered, errors_filtered, label=label, color=color, marker=marker, s=200)
         points = np.array(filtered_data)
         sorted_indices = np.argsort(points[:, 0])
         sorted_points = points[sorted_indices]
@@ -702,14 +729,12 @@ def plot_ablation_results_cost_model(
         for point in sorted_points[1:]:
             if point[1] < pareto_front[-1][1]:
                 pareto_front.append(point)
-
         pareto_front = np.array(pareto_front)
-
         ax1.step(
             pareto_front[:, 0],
             pareto_front[:, 1],
             where="post",
-            linestyle="-",
+            linestyle="--",
             color=color,
         )
 
@@ -717,28 +742,26 @@ def plot_ablation_results_cost_model(
             p_costs = data["predicted_data"]["costs"]
             p_errors = data["predicted_data"]["errors"]
             if p_costs and p_errors:
-                ax2.scatter(p_costs, p_errors, label=f"{labels[idx]}", color=color)
+                ax2.scatter(p_costs, p_errors, label=label, color=color, marker=marker)
                 pred_points = np.column_stack((p_costs, p_errors))
                 pred_sorted_indices = np.argsort(pred_points[:, 0])
                 pred_sorted_points = pred_points[pred_sorted_indices]
-
                 pred_pareto = [pred_sorted_points[0]]
                 for pt in pred_sorted_points[1:]:
                     if pt[1] < pred_pareto[-1][1]:
                         pred_pareto.append(pt)
                 pred_pareto = np.array(pred_pareto)
-
                 ax2.step(
                     pred_pareto[:, 0],
                     pred_pareto[:, 1],
                     where="post",
-                    linestyle="-",
+                    linestyle="--",
                     color=color,
                 )
 
-    ax1.set_xlabel("Runtimes (seconds)")
-    ax1.set_ylabel("Relative Errors (%)")
-    ax1.set_title("Pareto Fronts for Cost Model Ablation")
+    ax1.scatter(original_runtime, original_error, marker="^", color=red, s=200, label="Original")
+    ax1.set_xlabel("Runtime (second)")
+    ax1.set_ylabel("Relative Error")
     ax1.set_yscale("symlog", linthresh=1e-14)
     ax1.set_ylim(bottom=-1e-14)
     ax1.legend()
@@ -747,7 +770,6 @@ def plot_ablation_results_cost_model(
     if ax2 is not None:
         ax2.set_xlabel("Cost Budget")
         ax2.set_ylabel("Predicted Error")
-        ax2.set_title("Predicted Pareto Front")
         ax2.set_yscale("symlog", linthresh=1e-14)
         ax2.set_ylim(bottom=-1e-14)
         ax2.legend()
@@ -771,11 +793,181 @@ def remove_mllvm_flag(flags_list, flag_prefix):
     return new_flags
 
 
+def analyze_all_data(tmp_dir, thresholds=None, prefix_filter=""):
+    prefixes = []
+    data_list = []
+
+    for filename in os.listdir(tmp_dir):
+        if filename.endswith("benchmark_data.pkl") and (prefix_filter == "" or filename.startswith(prefix_filter)):
+            data_file = os.path.join(tmp_dir, filename)
+            with open(data_file, "rb") as f:
+                data = pickle.load(f)
+            prefix = filename[: -len("benchmark_data.pkl")]
+            prefixes.append(prefix)
+            data_list.append((prefix, data))
+
+    print("Number of tested FPBench functions:", len(data_list))
+    if not data_list:
+        print("No benchmark data files found in the tmp directory.")
+        return
+
+    print(f"Analyzing data for prefixes: {', '.join(prefixes)}\n")
+
+    if thresholds is None:
+        thresholds = [
+            0,
+            1e-15,
+            1e-14,
+            1e-13,
+            1e-12,
+            1e-11,
+            1e-10,
+            1e-9,
+            1e-8,
+            1e-7,
+            1e-6,
+            1e-5,
+            5e-5,
+            1e-4,
+            1e-3,
+            1e-2,
+            1e-1,
+            0.2,
+            0.3,
+            0.4,
+            0.5,
+            0.9,
+            1,
+        ]
+
+    min_runtime_ratios = {threshold: {} for threshold in thresholds}
+
+    for prefix, data in data_list:
+        budgets = data["budgets"]
+        runtimes = data["runtimes"]
+        errors = data["errors"]
+        original_runtime = data["original_runtime"]
+        original_error = data["original_error"]
+
+        for threshold in thresholds:
+            min_ratio = None
+            for err, runtime in zip(errors, runtimes):
+                if err is not None and runtime is not None and err <= threshold:
+                    runtime_ratio = runtime / original_runtime
+                    if min_ratio is None or runtime_ratio < min_ratio:
+                        min_ratio = runtime_ratio
+            if min_ratio is not None:
+                min_runtime_ratios[threshold][prefix] = min_ratio
+
+    overall_runtime_improvements = {}
+    for threshold in thresholds:
+        ratios = min_runtime_ratios[threshold].values()
+        if ratios:
+            log_sum = sum(math.log(min(1, ratio)) for ratio in ratios)
+            geo_mean_ratio = math.exp(log_sum / len(ratios))
+            percentage_improvement = (1 - geo_mean_ratio) * 100
+            overall_runtime_improvements[threshold] = percentage_improvement
+        else:
+            overall_runtime_improvements[threshold] = None
+
+    print("\nGeometric average percentage of runtime improvements while allowing some level of relative error:")
+    for threshold in thresholds:
+        percentage_improvement = overall_runtime_improvements[threshold]
+        if percentage_improvement is not None:
+            print(
+                f"Allowed relative error ≤ {threshold} ({len(min_runtime_ratios[threshold])} benchmarks): "
+                f"{percentage_improvement:.2f}% runtime reduction / {1 / (1 - percentage_improvement / 100):.2f}x average speedup"
+            )
+        else:
+            print(f"Allowed relative error ≤ {threshold}: No data")
+
+    max_speedups = {}
+    max_speedup_prefixes = {}
+    for threshold in thresholds:
+        if min_runtime_ratios[threshold]:
+            best_prefix = min(min_runtime_ratios[threshold], key=min_runtime_ratios[threshold].get)
+            best_ratio = min_runtime_ratios[threshold][best_prefix]
+            max_speedup = 1 / best_ratio if best_ratio > 0 else float("inf")
+            max_speedups[threshold] = max_speedup
+            max_speedup_prefixes[threshold] = best_prefix
+        else:
+            max_speedups[threshold] = None
+            max_speedup_prefixes[threshold] = None
+
+    print("\nMaximum speedup on a single benchmark for each threshold:")
+    for threshold in thresholds:
+        prefix = max_speedup_prefixes[threshold]
+        if prefix is not None:
+            print(f"Allowed relative error ≤ {threshold}: {max_speedups[threshold]:.2f}x speedup ({prefix})")
+        else:
+            print(f"Allowed relative error ≤ {threshold}: No data")
+
+    max_accuracy_improvement_ratio = 0.0
+    max_accuracy_improvement_prefix = None
+    better_accuracy_count = 0
+
+    for prefix, data in data_list:
+        orig_err = data["original_error"]
+        valid_optimized_errors = [err for err in data["errors"] if err is not None and err > 0]
+        if valid_optimized_errors and orig_err is not None:
+            best_optimized_error = min(valid_optimized_errors)
+            if best_optimized_error < orig_err:
+                better_accuracy_count += 1
+                improvement_ratio = orig_err / best_optimized_error
+                if improvement_ratio > max_accuracy_improvement_ratio:
+                    max_accuracy_improvement_ratio = improvement_ratio
+                    max_accuracy_improvement_prefix = prefix
+
+    if max_accuracy_improvement_prefix is not None:
+        print(
+            f"\nMaximum accuracy improvement ratio: {max_accuracy_improvement_ratio:.2f}x (in benchmark: {max_accuracy_improvement_prefix})"
+        )
+    else:
+        print("\nNo accuracy improvements found.")
+
+    print(f"\nNumber of benchmarks where we can get better accuracy: {better_accuracy_count}")
+
+    original_errors = [
+        data["original_error"]
+        for _, data in data_list
+        if data["original_error"] is not None and data["original_error"] > 0
+    ]
+
+    if original_errors:
+        log_sum = sum(math.log(err) for err in original_errors)
+        geomean_error = math.exp(log_sum / len(original_errors))
+        print("Geometric mean of original relative errors:", geomean_error)
+    else:
+        print("No valid original errors found.")
+
+    reduction_ratios = []
+    for prefix, data in data_list:
+        orig_err = data["original_error"]
+        valid_optimized_errors = [err for err in data["errors"] if err is not None and err > 0]
+        if valid_optimized_errors and orig_err is not None and orig_err > 0:
+            best_optimized_error = min(valid_optimized_errors)
+            if best_optimized_error < orig_err:
+                reduction_ratio = best_optimized_error / orig_err
+                reduction_ratios.append(reduction_ratio)
+
+    if reduction_ratios:
+        log_sum = sum(math.log(ratio) for ratio in reduction_ratios)
+        geomean_reduction = math.exp(log_sum / len(reduction_ratios))
+        improvement_factor = 1 / geomean_reduction
+        print("\nGeometric mean of error reduction:", geomean_reduction)
+        print("Average improvement factor in error:", improvement_factor, "x")
+    else:
+        print("\nNo error improvements found.")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Run the ablation study with widen-range parameter.")
     parser.add_argument("--prefix", type=str, required=True, help="Prefix for intermediate files (e.g., rosa-ex23-)")
     parser.add_argument("--clean", action="store_true", help="Clean up generated files")
     parser.add_argument("--plot-only", action="store_true", help="Plot results from existing data")
+    parser.add_argument(
+        "--analytics", action="store_true", help="Only show analytics from existing pkl files without generating data"
+    )
     parser.add_argument("--output-format", type=str, default="png", help="Output format for plots (e.g., png, pdf)")
     parser.add_argument(
         "--num-parallel", type=int, default=16, help="Number of parallel processes to use (default: 16)"
@@ -804,6 +996,18 @@ def main():
     os.makedirs(plots_dir, exist_ok=True)
 
     example_txt_path = os.path.join(tmp_dir, f"{original_prefix}example.txt")
+
+    if args.analytics:
+        if args.ablation_type == "widen-range":
+            widen_ranges = [0.1, 1.0, 10]
+            print("\n=== Analytics for widen-range experiments ===")
+            for X in widen_ranges:
+                prefix_with_x = f"{original_prefix}abl-widen-range-{X}-"
+                print(f"\n--- Analytics for widen-range = {X} ---")
+                analyze_all_data(tmp_dir, thresholds=None, prefix_filter=prefix_with_x)
+        else:
+            print("Analytics for cost-model experiments are not implemented.")
+        sys.exit(0)
 
     if args.clean:
         clean(tmp_dir, logs_dir, plots_dir)
@@ -835,8 +1039,8 @@ def main():
             generate_example_txt(tmp_dir, original_prefix)
 
         if args.ablation_type == "widen-range":
-            # widen_ranges = [0.001, 0.01, 0.1, 1.0, 10.0, 100.0, 1000.0, math.inf]
-            widen_ranges = [0, 1e-9, 1e-6, 0.001, 1.0, 1000.0, 1e6, 1e9]
+            # Only run for these three widen-range values.
+            widen_ranges = [0.1, 1.0, 10]
             all_data = {}
             for X in widen_ranges:
                 print(f"=== Running ablation study with widen-range={X} ===")
@@ -875,6 +1079,12 @@ def main():
                 args.output_format,
                 show_prediction=args.show_prediction,
             )
+
+            print("\n=== Analytics ===")
+            for X in widen_ranges:
+                prefix_with_x = f"{original_prefix}abl-widen-range-{X}-"
+                print(f"\n--- Analytics for widen-range = {X} ---")
+                analyze_all_data(tmp_dir, thresholds=None, prefix_filter=prefix_with_x)
 
         if args.ablation_type == "cost-model":
             print("=== Running cost-model ablation study ===")
@@ -929,6 +1139,8 @@ def main():
                 args.output_format,
                 show_prediction=args.show_prediction,
             )
+
+        clean_tmp_except_pkl(tmp_dir)
 
 
 if __name__ == "__main__":
